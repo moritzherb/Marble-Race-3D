@@ -14,11 +14,11 @@ The reference solution is an expert's run. First-time players need reading time,
 |---|---|---|---|---|---|---|---|
 | 1 | First Tilt | 1 | 5×3, 1 | 2.1 s | 20 s | 6 s | 4 s |
 | 2 | Two Grooves | 2 | 5×5, 1 | 2.2 s | 20 s | 6 s | 4 s |
-| 3 | Fork in the Road | 2 | 5×5, 1 | 3.0 s | 20 s | 7 s | 5 s |
+| 3 | Fork in the Road | 2 | 5×5, 1 | 2.9 s | 20 s | 7 s | 4 s |
 | 4 | Downhill Only | 2 | 6×4, 2 | 5.4 s | 27 s | 11 s | 7 s |
 | 5 | Counterweight | 2 | 5×5, 1 | 4.1 s | 23 s | 9 s | 6 s |
-| 6 | Hold the Door | 2 | 6×3, 1 | 6.4 s | 30 s | 12 s | 8 s |
-| 7 | Blue Goes First | 3 | 6×6, 2 | 6.6 s | 27 s | 12 s | 8 s |
+| 6 | Hold the Door | 2 | 6×3, 1 | 6.3 s | 30 s | 12 s | 8 s |
+| 7 | Blue Goes First | 3 | 6×6, 2 | 6.5 s | 27 s | 12 s | 8 s |
 | 8 | Underpass | 3 | 5×6, 2 | 6.7 s | 27 s | 12 s | 8 s |
 | 9 | Chain Reaction | 3 | 6×6, 1 | 5.8 s | 25 s | 11 s | 7 s |
 | 10 | The Machine | 4 | 6×8, 3 | 5.5 s | 23 s | 11 s | 7 s |

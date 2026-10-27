@@ -14,6 +14,7 @@ export const PHYSICS = {
   marbleBounce: 0.5,    // fraction of speed kept in marble-to-marble hits.
   rejectSpeed: 1.6,     // speed a marble is pushed back with when it enters the wrong colour's goal.
   turnBias: 0.05,       // at a T-junction, how much a turn is preferred over going straight (in sin of tilt).
+  junctionReach: 0.22,  // a marble this close to a T-junction's centre is in its open square and can roll into any branch.
 };
 
 export const CONTROLS = {

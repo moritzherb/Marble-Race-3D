@@ -174,3 +174,34 @@ test('a machine in separate parts is reported as a level error', () => {
   });
   assert.ok(track.errors.some((e) => e.includes('2 separate parts')));
 });
+
+test('a marble resting at a T-junction rolls into the branch you tilt towards', () => {
+  // Blue sits just west of the junction centre, on the east-west groove. Tilting north,
+  // straight across its own groove, must still send it up the north branch.
+  const level = {
+    marbles: [{ color: 'blue', at: [1, 0, 1], s: 0.3 }],
+    pieces: [
+      ['end', 0, 0, 1, 2],
+      ['tee', 1, 0, 1, 0], // arms west and east, stem north
+      ['end', 2, 0, 1, 0],
+      ['goal', 1, 0, 0, 3, { color: 'blue' }],
+    ],
+  };
+  assert.deepEqual(buildTrack(level).errors, []);
+  assert.equal(replay(level, [['N', 3]], { maxTime: 3 }).won, true);
+});
+
+test('a marble away from the junction still ignores tilt across its groove', () => {
+  const level = {
+    marbles: [{ color: 'blue', at: [0, 0, 1] }],
+    pieces: [
+      ['end', 0, 0, 1, 2],
+      ['tee', 1, 0, 1, 0],
+      ['end', 2, 0, 1, 0],
+      ['goal', 1, 0, 0, 3, { color: 'blue' }],
+    ],
+  };
+  const run = replay(level, [['N', 3]], { maxTime: 3 });
+  assert.equal(run.won, false);
+  assert.ok(Math.abs(run.sim.marbles[0].pos[0] - 0.35) < 1e-6);
+});

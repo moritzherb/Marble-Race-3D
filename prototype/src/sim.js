@@ -50,7 +50,7 @@ export function stepSim(sim, dt, g) {
     if (m.delivered) continue;
     const edge = sim.track.edges[m.edge];
     const { tangent } = sampleEdge(edge, m.s);
-    const a = roll * dot(g, tangent);
+    const a = roll * dot(g, tangent) + junctionPull(sim, m, edge, g);
 
     // Drag is low while gravity pushes along the groove and high when it doesn't,
     // so marbles stop quickly when you let go or tilt across their groove.
@@ -82,6 +82,32 @@ export function stepSim(sim, dt, g) {
   updateMechanisms(sim, events);
   sim.time += dt;
   return events;
+}
+
+// A T-junction is an open square in the wood, so a marble sitting in it rolls into a
+// branch that is downhill even if its own groove runs across the tilt. Without this the
+// marble would wait at the corner until the player wiggled it over the exact centre.
+// Returns extra acceleration along the marble's edge, towards the junction.
+function junctionPull(sim, m, edge, g) {
+  const reach = PHYSICS.junctionReach;
+  let end;
+  if (m.s < reach) end = 0;
+  else if (edge.L - m.s < reach) end = 1;
+  else return 0;
+  const node = sim.track.nodes[end === 0 ? edge.n0 : edge.n1];
+  if (node.links.length < 3) return 0;
+  const roll = PHYSICS.rollFactor;
+  const away = roll * dot(g, tangentAwayFrom(edge, end));
+  let best = 0;
+  for (const link of node.links) {
+    if (link.edge === edge.id) continue;
+    best = Math.max(best, roll * dot(g, tangentAwayFrom(sim.track.edges[link.edge], link.end)));
+  }
+  const unit = roll * PHYSICS.gravity;
+  // Only when a branch is clearly more downhill than carrying on along this groove;
+  // ties are decided at the centre itself, where a turn wins.
+  if (best < 0.02 * unit || best <= away + 0.02 * unit) return 0;
+  return end === 0 ? -best : best;
 }
 
 // Slide a marble ds along the network, deciding which way to go at each node.

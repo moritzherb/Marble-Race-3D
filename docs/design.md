@@ -24,7 +24,7 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 
 1. **Flat groove:** the marble rolls only while you tilt along it. Let go and it brakes to a stop.
 2. **Ramp:** steeper (26.6°) than the max tilt (20°), so it only works downhill.
-3. **T-junction:** the marble takes the most downhill branch. A turn wins a tie, so a diagonal tilt means "take this turn". With no branch downhill it keeps going straight; with no straight option it bumps to a stop.
+3. **T-junction:** the marble takes the most downhill branch. A turn wins a tie, so a diagonal tilt means "take this turn". With no branch downhill it keeps going straight; with no straight option it bumps to a stop. The junction is an open square, so a marble resting in it rolls into any branch that is clearly downhill, even if its own groove runs across the tilt.
 4. **Crossing:** marbles go straight through.
 5. **Plate and gate:** a marble resting on the plate keeps the linked gate open.
 6. **Goal:** the matching colour locks in. A wrong colour bounces back, which costs time but does not fail the level. A goal with a metal band also acts as a plate, which gives you delivery order.
@@ -50,9 +50,10 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 - A machine is only its track blocks and the supports under raised parts, with no filler slabs. Every block must touch the rest so the machine tilts as one piece; the level tests check this.
 - Raised blocks get support columns automatically.
 - **Wood:** light, procedural grain, five tint variants. Small gaps between blocks show the seams that make it read as a real toy.
-- **Grooves:** darker, shaded strips along the rails, so they read as carved channels.
+- **Grooves:** carved into the block tops as a smooth U-shaped channel about a third of the block wide, darker where deeper. Marbles rest on the channel floor, so they visibly roll in the groove. Goals and plates sit in round cups.
 - **Marbles:** glossy, with a pale band so rolling is visible. Marbles inside tunnels show as coloured outlines through the wood.
-- **Junctions:** where grooves meet (T-junctions, crossings), the channels merge into one carved floor. No groove is drawn over another.
+- **Junctions:** where grooves meet (T-junctions, crossings), the channels merge into one carved floor. Dead ends are rounded.
+- **Tunnels:** a block sitting on a straight groove gets an arched tunnel through its base, with a dark inside, so the marble rolls into a visible opening.
 - **Mechanisms:** goals are a coloured ring and inlay. Plates and gates are metal (brass for link A, graphite for link B). A cable is strung between two posts, one beside each plate (or banded goal) and one beside the gate it opens. When the gate is open, the cable glows and beads run along it towards the gate.
 - **Background:** teal backdrop. HUD in pale maple, with Arimo throughout.
 
