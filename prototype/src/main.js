@@ -81,11 +81,7 @@ function showHome() {
   leaveAttempt();
   closeCard();
   game.screen = 'home';
-  const progress = loadProgress();
-  const done = LEVELS.filter((_, i) => isComplete(progress, i)).length;
   prepareLevel(nextLevelIndex());
-  $('homeProgress').textContent = `${done} of ${LEVELS.length} levels complete`;
-  $('homeNext').textContent = done === LEVELS.length ? 'All levels complete · play again' : done === 0 ? 'First level' : 'Next level';
   $('homeNum').textContent = game.index + 1;
   $('homeName').textContent = game.level.name;
   $('playBtn').setAttribute('aria-label', `Play level ${game.index + 1}, ${game.level.name}`);
@@ -187,7 +183,6 @@ attachInput($('stage'), {
 });
 
 $('playBtn').addEventListener('click', () => play());
-$('homeLevels').addEventListener('click', () => openCard('levels'));
 $('homeSettings').addEventListener('click', () => openCard('settings'));
 $('homeBtn').addEventListener('click', () => showHome());
 $('settingsBtn').addEventListener('click', () => openCard('settings'));
@@ -200,7 +195,7 @@ $('orbitLeft').addEventListener('click', () => view.orbit(-1));
 $('orbitRight').addEventListener('click', () => view.orbit(1));
 window.addEventListener('resize', () => view.resize());
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && (game.card === 'levels' || game.card === 'settings')) closeCard();
+  if (e.code === 'Escape' && MENU_CARDS.has(game.card)) closeCard();
   else if (game.screen === 'home' && !game.card && (e.code === 'Enter' || e.code === 'Space')) {
     e.preventDefault();
     play();
@@ -255,7 +250,7 @@ function onSimEvent(e) {
   if (e.type === 'deliver') {
     renderChips();
     try {
-      navigator.vibrate?.(18);
+      if (settings.vibration) navigator.vibrate?.(18);
     } catch {
       // Vibration is optional.
     }
@@ -307,6 +302,10 @@ let hintTimer = null;
 function showHint(text) {
   const el = $('hint');
   el.textContent = text;
+  if (!settings.hints) {
+    el.classList.add('gone');
+    return;
+  }
   el.classList.remove('gone');
   delete el.dataset.dismissing;
   clearTimeout(hintTimer);
@@ -329,15 +328,19 @@ const STAR = (on) =>
 const LOCK =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
 
+// Cards opened from a menu pause the game; win and time-up cards don't need to.
+const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools']);
+const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator;
+
 function openCard(kind, data = {}) {
   game.card = kind;
-  if (kind === 'levels' || kind === 'settings') game.paused = true;
+  if (MENU_CARDS.has(kind)) game.paused = true;
   const card = $('card');
   card.innerHTML = CARDS[kind](data);
   $('scrim').hidden = false;
   card.setAttribute('aria-label', card.querySelector('h2')?.textContent || kind);
   for (const el of card.querySelectorAll('[data-act]')) el.addEventListener('click', () => ACTIONS[el.dataset.act](el));
-  if (kind === 'settings') wireSettings(card);
+  if (kind === 'settings' || kind === 'tools') wireSettings(card);
   (card.querySelector('.primary') || card.querySelector('[data-act]'))?.focus({ preventScroll: true });
 }
 
@@ -357,6 +360,10 @@ const ACTIONS = {
   },
   next: () => (isLast() ? showHome() : play(game.index + 1)),
   home: () => showHome(),
+  settings: () => openCard('settings'),
+  howto: () => openCard('howto'),
+  tools: () => openCard('tools'),
+  levels: () => openCard('levels'),
   pick: (el) => play(Number(el.dataset.i)),
   solution: () => watchSolution(),
   copyLog: (el) => {
@@ -376,7 +383,7 @@ const ACTIONS = {
   },
   clearLog: () => {
     clearLog();
-    openCard('settings');
+    openCard('tools');
   },
   resetProgress: (el) => {
     if (el.dataset.armed) {
@@ -395,7 +402,7 @@ const ACTIONS = {
     Object.assign(PHYSICS, DEFAULT_PHYSICS);
     Object.assign(CONTROLS, DEFAULT_CONTROLS, { directionAssist: settings.directionAssist });
     computeTimes();
-    openCard('settings');
+    openCard('tools');
   },
 };
 
@@ -438,21 +445,37 @@ const CARDS = {
           <span class="got">${p ? '★'.repeat(p.stars) + '☆'.repeat(3 - p.stars) : '☆☆☆'}</span></button>`;
       }).join('')}
     </div>
-    <div class="row"><button class="btn" data-act="close" type="button">Back</button></div>`;
+    <div class="row"><button class="btn" data-act="tools" type="button">Back</button></div>`;
   },
-  settings: () => {
-    const rows = summariseLog();
-    return `
-    <h2>Settings</h2>
-    <h3>How to play</h3>
+  // What players see: three big toggles and how to play. Playtest tools sit behind a
+  // small link at the bottom.
+  settings: () => `
+    <div class="card-head"><h2>Settings</h2>
+      <button class="close-btn" data-act="close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button></div>
+    <div class="toggles">
+      ${toggle('sound', 'Sound', ICONS.sound)}
+      ${canVibrate ? toggle('vibration', 'Vibration', ICONS.vibration) : ''}
+      ${toggle('hints', 'Hints', ICONS.hints)}
+    </div>
+    <button class="btn primary wide" data-act="howto" type="button">How to play</button>
+    <p class="fine"><button class="linkish" data-act="tools" type="button">Playtest tools</button></p>`,
+  howto: () => `
+    <div class="card-head"><h2>How to play</h2>
+      <button class="close-btn" data-act="settings" type="button" aria-label="Back to settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button></div>
     <ul class="howto">
       <li>Drag anywhere to tilt the machine. Marbles roll the way you drag.</li>
       <li>Let go and the machine levels out; marbles slow to a stop.</li>
       <li>A marble only rolls along its own groove.</li>
       <li>Get every marble into the ring of its colour before time runs out.</li>
-      <li>A marble resting on a metal plate holds the gate at the other end of its cable open. A goal with a metal band opens its gate once filled.</li>
+      <li>A marble resting on a gold target holds the gate at the other end of its cable open. A goal with a metal band opens its gate once filled.</li>
     </ul>
-    <h3>Playtest options</h3>
+    <button class="btn primary wide" data-act="close" type="button">Got it</button>`,
+  // For the designer and playtest sessions, not for players.
+  tools: () => {
+    const rows = summariseLog();
+    return `
+    <div class="card-head"><h2>Playtest tools</h2>
+      <button class="close-btn" data-act="settings" type="button" aria-label="Back to settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button></div>
     <div class="setting"><label>Clock starts<small>Compare both with testers</small></label>
       <span class="seg" role="group" aria-label="Clock starts">
         <button type="button" data-set="timerStart" data-v="appear" aria-pressed="${settings.timerStart === 'appear'}">When it appears</button>
@@ -463,13 +486,9 @@ const CARDS = {
         <button type="button" data-set="directionAssist" data-v="true" aria-pressed="${settings.directionAssist}">On</button>
         <button type="button" data-set="directionAssist" data-v="false" aria-pressed="${!settings.directionAssist}">Off</button>
       </span></div>
-    <div class="setting"><label>Sound</label>
-      <span class="seg" role="group" aria-label="Sound">
-        <button type="button" data-set="sound" data-v="true" aria-pressed="${settings.sound}">On</button>
-        <button type="button" data-set="sound" data-v="false" aria-pressed="${!settings.sound}">Off</button>
-      </span></div>
     <div class="setting"><label>Progress<small>Locks every level but the first again, for the next tester</small></label>
-      <button class="btn small" data-act="resetProgress" type="button">Reset progress</button></div>
+      <span class="row"><button class="btn small" data-act="levels" type="button">Levels</button>
+      <button class="btn small" data-act="resetProgress" type="button">Reset progress</button></span></div>
     <h3>Feel tuning</h3>
     ${slider('gravity', 'Marble speed (gravity)', PHYSICS.gravity, 12, 60, 1, PHYSICS)}
     ${slider('maxTiltDeg', 'Max tilt (degrees)', PHYSICS.maxTiltDeg, 10, 25, 1, PHYSICS)}
@@ -490,9 +509,20 @@ const CARDS = {
       <button class="btn small" data-act="copyLog" type="button">Copy log</button>
       <button class="btn small" data-act="clearLog" type="button">Clear log</button>
     </div>
-    <div class="row"><button class="btn primary" data-act="close" type="button">Back</button></div>`;
+    <div class="row"><button class="btn primary" data-act="close" type="button">Back to the game</button></div>`;
   },
 };
+
+const ICONS = {
+  sound: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9h3.5L12 5v14l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  vibration: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4.5 8.5v7M19.5 8.5v7M2 10.5v3M22 10.5v3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  hints: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.8a6.7 6.7 0 0 0-3.9 12.2c.6.4.9 1 .9 1.7V17h6v-.3c0-.7.3-1.3.9-1.7A6.7 6.7 0 0 0 12 2.8z"/><path d="M9.5 19.5h5M10.5 21.7h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+};
+
+function toggle(key, label, icon) {
+  return `<button class="toggle" type="button" data-toggle="${key}" aria-pressed="${settings[key]}">
+    <span class="disc">${icon}</span><span>${label}</span></button>`;
+}
 
 function slider(key, label, value, min, max, step, target) {
   const owner = target === PHYSICS ? 'physics' : 'controls';
@@ -507,6 +537,23 @@ function solutionNote() {
 }
 
 function wireSettings(card) {
+  for (const b of card.querySelectorAll('[data-toggle]')) {
+    b.addEventListener('click', () => {
+      const key = b.dataset.toggle;
+      settings[key] = !settings[key];
+      saveSettings(settings);
+      b.setAttribute('aria-pressed', String(settings[key]));
+      audio.setSoundEnabled(settings.sound);
+      if (key === 'hints' && !settings.hints) $('hint').classList.add('gone');
+      if (key === 'vibration' && settings.vibration) {
+        try {
+          navigator.vibrate?.(18);
+        } catch {
+          // Vibration is optional.
+        }
+      }
+    });
+  }
   for (const b of card.querySelectorAll('[data-set]')) {
     b.addEventListener('click', () => {
       const key = b.dataset.set;

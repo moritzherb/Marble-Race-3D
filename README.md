@@ -12,11 +12,11 @@ This prototype exists to answer one question before more is built: **can players
   ```
   It needs an internet connection the first time, to load three.js and the fonts.
 
-**How it plays:** the app opens on a home screen showing your next level; press Play. Levels unlock in order.
+**How it plays:** the app opens on a home screen with your next level turning slowly in the background. Tap the big level button at the bottom to play. The gear opens Settings: Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. Levels unlock in order.
 
 **Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal), R to restart, and Enter on the home screen to play.
 
-**For testers:** Settings → Reset progress starts a fresh run from level 1.
+**For testers:** Settings → Playtest tools has the level list, Reset progress (a fresh run from level 1), the clock and direction-assist options, feel tuning and the playtest log.
 
 ## Tests
 ```sh

@@ -20,7 +20,7 @@ function write(key, value) {
   }
 }
 
-export const DEFAULT_SETTINGS = { timerStart: 'appear', directionAssist: true, sound: true };
+export const DEFAULT_SETTINGS = { timerStart: 'appear', directionAssist: true, sound: true, vibration: true, hints: true };
 
 export function loadSettings() {
   return { ...DEFAULT_SETTINGS, ...read(KEYS.settings, {}) };

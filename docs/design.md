@@ -59,9 +59,10 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 
 ## Flow
 
-- **Home screen:** the app opens here. The next unfinished level turns slowly behind a central Play button, with Levels and Settings below.
+- **Home screen:** the app opens here, kept as simple as a casual game's. The next unfinished level turns slowly in the background, with one big "Level N" button at the bottom (the level's name on a tab above it) and a gear in the top right.
+- **Settings:** three round toggles (Sound, Vibration, Hints) and How to play. Vibration only appears where the browser supports it, so not on iPhone. Testing options sit behind a small "Playtest tools" link.
 - **Progression:** levels unlock in order; finishing one opens the next. The level list shows locked levels.
-- **For testers:** Settings → Reset progress locks everything again for the next person.
+- **For testers:** Settings → Playtest tools → Reset progress locks everything again for the next person. The level list lives there too, since players just play the next level.
 
 ## Biggest risk, and the first test
 
