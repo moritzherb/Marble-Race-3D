@@ -120,7 +120,7 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     transition: background 0.2s;
   }
-  .chip-marble.home { background: var(--c); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
+  .chip-marble.delivered { background: var(--c); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
   .hint {
     max-width: min(19rem, 100%);
     background: rgba(255, 255, 255, 0.9);
@@ -245,7 +245,7 @@
   /* Home screen: the next machine turns slowly behind a big Play button. */
   body.at-home :is(.top, .sub, .bottom, .banner),
   body:has(#home:not([hidden])) :is(.top, .sub, .bottom, .banner) { display: none; }
-  .home {
+  .home-screen {
     position: fixed;
     inset: 0;
     display: grid;
@@ -258,13 +258,13 @@
     color: #fff;
     text-align: center;
   }
-  .home button { pointer-events: auto; }
-  .home h1 { margin: 0; font: 700 32px/1.1 var(--font-display); letter-spacing: 0.2px; text-wrap: balance; text-shadow: 0 2px 0 var(--table-deep); }
-  .home .progress { margin: 8px 0 0; font-size: 14px; opacity: 0.92; }
+  .home-screen button { pointer-events: auto; }
+  .home-screen h1 { margin: 0; font: 700 32px/1.1 var(--font-display); letter-spacing: 0.2px; text-wrap: balance; text-shadow: 0 2px 0 var(--table-deep); }
+  .home-screen .progress { margin: 8px 0 0; font-size: 14px; opacity: 0.92; }
   .home-play { display: grid; place-content: center; justify-items: center; gap: 16px; }
   .next-card { display: grid; gap: 3px; padding: 8px 18px 10px; border-radius: 14px; background: rgba(18, 74, 77, 0.82); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
-  .home .next { margin: 0; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.85; }
-  .home .level { margin: 0; font: 700 19px/1.2 var(--font-display); }
+  .home-screen .next { margin: 0; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.85; }
+  .home-screen .level { margin: 0; font: 700 19px/1.2 var(--font-display); }
   .play {
     display: inline-flex;
     align-items: center;
@@ -314,7 +314,7 @@
   </button>
 </footer>
 
-<section class="home" id="home" aria-label="Home">
+<section class="home-screen" id="home" aria-label="Home">
   <div>
     <h1>Marble Machine Rush</h1>
     <p class="progress" id="homeProgress">0 of 10 levels complete</p>

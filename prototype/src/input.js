@@ -64,18 +64,19 @@ export function attachInput(surface, { screenToGround, onTilt, onFirstTouch }) {
   surface.addEventListener('pointerup', end);
   surface.addEventListener('pointercancel', end);
 
-  // Keyboard: arrows or WASD, screen-relative like the drag. Two keys make a diagonal.
+  // Keyboard: arrows or WASD. Each key tilts along the groove direction closest to its
+  // screen direction, so two keys always make an exact diagonal, whatever the camera angle.
   function fromKeys() {
     let x = 0;
-    let y = 0;
+    let z = 0;
     for (const k of held) {
-      x += KEYS[k][0];
-      y += KEYS[k][1];
+      const [gx, gz] = screenToGround(KEYS[k][0], KEYS[k][1]);
+      if (Math.abs(gx) >= Math.abs(gz)) x += Math.sign(gx);
+      else z += Math.sign(gz);
     }
-    if (!x && !y) return null;
-    const [gx, gz] = screenToGround(x, y);
-    const l = Math.hypot(gx, gz) || 1;
-    return assistDirection([gx / l, gz / l]);
+    if (!x && !z) return null;
+    const l = Math.hypot(x, z);
+    return [x / l, z / l];
   }
   window.addEventListener('keydown', (e) => {
     if (!KEYS[e.code] || e.repeat) return;

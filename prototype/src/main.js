@@ -299,7 +299,7 @@ function updateClock() {
 
 function renderChips() {
   $('chips').innerHTML = game.sim.marbles
-    .map((m) => `<span class="chip-marble${m.delivered ? ' home' : ''}" style="--c:${colorCss(m.color)}" title="${m.color}${m.delivered ? ' (home)' : ''}"></span>`)
+    .map((m) => `<span class="chip-marble${m.delivered ? ' delivered' : ''}" style="--c:${colorCss(m.color)}" title="${m.color}${m.delivered ? ' (home)' : ''}"></span>`)
     .join('');
 }
 
