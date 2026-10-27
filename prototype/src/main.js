@@ -1,4 +1,4 @@
-// The game: level flow, timer, win/lose, menus and the playtest log.
+// The game: home screen, level flow, timer, win/lose, menus and the playtest log.
 
 import { LEVELS } from './levels.js';
 import { PHYSICS, CONTROLS, SIM_DT } from './config.js';
@@ -9,7 +9,7 @@ import { replay, levelTimes } from './replay.js';
 import { createView, MARBLE_COLORS } from './render.js';
 import { attachInput } from './input.js';
 import * as audio from './audio.js';
-import { loadSettings, saveSettings, loadProgress, recordResult, loadLog, appendLog, clearLog } from './store.js';
+import { loadSettings, saveSettings, loadProgress, recordResult, resetProgress, loadLog, appendLog, clearLog } from './store.js';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_PHYSICS = { ...PHYSICS };
@@ -21,6 +21,7 @@ audio.setSoundEnabled(settings.sound);
 
 const view = createView($('stage'));
 const game = {
+  screen: 'home', // home | game
   index: 0,
   level: null,
   track: null,
@@ -41,6 +42,16 @@ const game = {
 
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
 
+// ---------- Progress: a level opens once the one before it is complete ----------
+
+const isComplete = (progress, i) => Boolean(progress[LEVELS[i].id]);
+const isUnlocked = (progress, i) => i === 0 || isComplete(progress, i - 1);
+function nextLevelIndex() {
+  const progress = loadProgress();
+  const i = LEVELS.findIndex((_, k) => !isComplete(progress, k));
+  return i === -1 ? 0 : i;
+}
+
 // ---------- Level flow ----------
 
 function computeTimes() {
@@ -50,8 +61,7 @@ function computeTimes() {
   game.times = levelTimes(game.level, ref.won ? ref.time : 12);
 }
 
-function loadLevel(index) {
-  if (game.level && game.phase === 'playing' && game.elapsed > 0.3) logAttempt('left');
+function prepareLevel(index) {
   game.index = (index + LEVELS.length) % LEVELS.length;
   game.level = LEVELS[game.index];
   game.track = buildTrack(game.level);
@@ -60,12 +70,46 @@ function loadLevel(index) {
   view.build(game.track);
   $('levelNum').textContent = game.index + 1;
   $('levelName').textContent = game.level.name;
+  restart(false);
+}
+
+function leaveAttempt() {
+  if (game.screen === 'game' && game.phase === 'playing' && !game.autoplay && (game.elapsed > 0.3 || game.tilts > 0)) logAttempt('left');
+}
+
+function showHome() {
+  leaveAttempt();
+  closeCard();
+  game.screen = 'home';
+  const progress = loadProgress();
+  const done = LEVELS.filter((_, i) => isComplete(progress, i)).length;
+  prepareLevel(nextLevelIndex());
+  $('homeProgress').textContent = `${done} of ${LEVELS.length} levels complete`;
+  $('homeNext').textContent = done === LEVELS.length ? 'All levels complete · play again' : done === 0 ? 'First level' : 'Next level';
+  $('homeNum').textContent = game.index + 1;
+  $('homeName').textContent = game.level.name;
+  $('playBtn').setAttribute('aria-label', `Play level ${game.index + 1}, ${game.level.name}`);
+  document.body.classList.add('at-home');
+  $('home').hidden = false;
+  view.setSpin(true);
+}
+
+function play(index = game.index) {
+  if (!isUnlocked(loadProgress(), index)) return;
+  audio.unlock();
+  leaveAttempt();
+  closeCard();
+  if (index !== game.index || !game.level) prepareLevel(index);
+  game.screen = 'game';
+  document.body.classList.remove('at-home');
+  $('home').hidden = true;
+  view.setSpin(false);
   showHint(game.level.learn);
   restart(false);
 }
 
 function restart(logIt = true) {
-  if (logIt && game.phase === 'playing' && !game.autoplay && (game.elapsed > 0.3 || game.tilts > 0)) logAttempt('restarted');
+  if (logIt && game.screen === 'game' && game.phase === 'playing' && !game.autoplay && (game.elapsed > 0.3 || game.tilts > 0)) logAttempt('restarted');
   game.sim = createSim(game.track);
   game.tilt = createTilt();
   game.phase = 'playing';
@@ -133,7 +177,7 @@ attachInput($('stage'), {
   screenToGround: view.screenToGround,
   onFirstTouch: () => audio.unlock(),
   onTilt: (target, holding) => {
-    if (game.autoplay || game.paused || game.phase !== 'playing') return;
+    if (game.screen !== 'game' || game.autoplay || game.paused || game.phase !== 'playing') return;
     if (holding && !game.tilt.holding) game.tilts++;
     game.tilt.target = target;
     game.tilt.holding = holding;
@@ -142,6 +186,11 @@ attachInput($('stage'), {
   },
 });
 
+$('playBtn').addEventListener('click', () => play());
+$('homeLevels').addEventListener('click', () => openCard('levels'));
+$('homeSettings').addEventListener('click', () => openCard('settings'));
+$('homeBtn').addEventListener('click', () => showHome());
+$('settingsBtn').addEventListener('click', () => openCard('settings'));
 $('restartBtn').addEventListener('click', () => {
   audio.unlock();
   closeCard();
@@ -149,17 +198,17 @@ $('restartBtn').addEventListener('click', () => {
 });
 $('orbitLeft').addEventListener('click', () => view.orbit(-1));
 $('orbitRight').addEventListener('click', () => view.orbit(1));
-$('levelsBtn').addEventListener('click', () => openCard('levels'));
-$('settingsBtn').addEventListener('click', () => openCard('settings'));
 window.addEventListener('resize', () => view.resize());
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && game.card && game.card !== 'win' && game.card !== 'fail') closeCard();
-  else if (e.code === 'KeyR' && !e.repeat) {
+  if (e.code === 'Escape' && (game.card === 'levels' || game.card === 'settings')) closeCard();
+  else if (game.screen === 'home' && !game.card && (e.code === 'Enter' || e.code === 'Space')) {
+    e.preventDefault();
+    play();
+  } else if (game.screen === 'game' && e.code === 'KeyR' && !e.repeat) {
     closeCard();
     restart();
   } else if ((e.code === 'KeyN' || e.code === 'Enter') && game.card === 'win') {
-    closeCard();
-    loadLevel(game.index + 1);
+    ACTIONS.next();
   }
 });
 
@@ -177,18 +226,16 @@ function frame(now) {
 
 function tick(dt) {
   if (game.autoplay) driveAutoplay(dt);
-  if (game.phase !== 'failed') {
-    game.acc += dt;
-    while (game.acc >= SIM_DT) {
-      updateTilt(game.tilt, SIM_DT);
+  game.acc += dt;
+  while (game.acc >= SIM_DT) {
+    updateTilt(game.tilt, SIM_DT);
+    if (game.phase !== 'failed') {
       const events = stepSim(game.sim, SIM_DT, gravityInMachine(game.tilt.current));
       for (const e of events) onSimEvent(e);
-      game.acc -= SIM_DT;
     }
-  } else {
-    updateTilt(game.tilt, dt);
+    game.acc -= SIM_DT;
   }
-  if (game.phase === 'playing') {
+  if (game.screen === 'game' && game.phase === 'playing') {
     if (game.timerRunning) {
       const before = game.timeLeft;
       game.timeLeft -= dt;
@@ -199,7 +246,8 @@ function tick(dt) {
     else if (game.timeLeft <= 0) fail();
     updateClock();
   }
-  audio.updateRolling(game.sim.marbles.map((m) => (m.delivered || game.phase === 'failed' ? 0 : Math.abs(m.v))));
+  const rolling = game.screen === 'game' && game.phase !== 'failed';
+  audio.updateRolling(game.sim.marbles.map((m) => (rolling && !m.delivered ? Math.abs(m.v) : 0)));
 }
 
 function onSimEvent(e) {
@@ -232,8 +280,7 @@ function driveAutoplay(dt) {
 }
 
 function watchSolution() {
-  closeCard();
-  restart();
+  play(game.index);
   game.timerRunning = true;
   game.autoplay = { steps: game.level.solution, i: 0, t: 0 };
   $('banner').textContent = 'Showing the reference solution';
@@ -261,6 +308,7 @@ function showHint(text) {
   const el = $('hint');
   el.textContent = text;
   el.classList.remove('gone');
+  delete el.dataset.dismissing;
   clearTimeout(hintTimer);
   hintTimer = setTimeout(() => el.classList.add('gone'), 9000);
 }
@@ -278,6 +326,8 @@ function dismissHint(ms) {
 
 const STAR = (on) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z" fill="${on ? 'var(--gold)' : 'none'}" stroke="${on ? '#b8841c' : 'var(--maple-edge)'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+const LOCK =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
 
 function openCard(kind, data = {}) {
   game.card = kind;
@@ -297,21 +347,17 @@ function closeCard() {
   $('scrim').hidden = true;
 }
 
+const isLast = () => game.index === LEVELS.length - 1;
+
 const ACTIONS = {
   close: () => closeCard(),
   retry: () => {
     closeCard();
     restart(false);
   },
-  next: () => {
-    closeCard();
-    loadLevel(game.index + 1);
-  },
-  levels: () => openCard('levels'),
-  pick: (el) => {
-    closeCard();
-    loadLevel(Number(el.dataset.i));
-  },
+  next: () => (isLast() ? showHome() : play(game.index + 1)),
+  home: () => showHome(),
+  pick: (el) => play(Number(el.dataset.i)),
   solution: () => watchSolution(),
   copyLog: (el) => {
     const text = JSON.stringify(loadLog(), null, 1);
@@ -332,6 +378,19 @@ const ACTIONS = {
     clearLog();
     openCard('settings');
   },
+  resetProgress: (el) => {
+    if (el.dataset.armed) {
+      resetProgress();
+      showHome();
+      return;
+    }
+    el.dataset.armed = '1';
+    el.textContent = 'Tap again to reset';
+    setTimeout(() => {
+      delete el.dataset.armed;
+      el.textContent = 'Reset progress';
+    }, 3000);
+  },
   resetTuning: () => {
     Object.assign(PHYSICS, DEFAULT_PHYSICS);
     Object.assign(CONTROLS, DEFAULT_CONTROLS, { directionAssist: settings.directionAssist });
@@ -348,7 +407,7 @@ const CARDS = {
     <div class="targets">3 stars under ${game.times.gold} s · 2 stars under ${game.times.par} s</div>
     <div class="row">
       <button class="btn" data-act="retry" type="button">Play again</button>
-      <button class="btn primary" data-act="next" type="button">${game.index === LEVELS.length - 1 ? 'Back to level 1' : 'Next level'}</button>
+      <button class="btn primary" data-act="next" type="button">${isLast() ? 'Home' : 'Next level'}</button>
     </div>`,
   fail: () => {
     const home = game.sim.marbles.filter((m) => m.delivered).length;
@@ -357,7 +416,7 @@ const CARDS = {
     <p>${home} of ${game.sim.marbles.length} marbles made it home.</p>
     <p class="note">${game.level.learn}</p>
     <div class="row">
-      <button class="btn" data-act="levels" type="button">Levels</button>
+      <button class="btn" data-act="home" type="button">Home</button>
       <button class="btn primary" data-act="retry" type="button">Try again</button>
     </div>`;
   },
@@ -365,15 +424,21 @@ const CARDS = {
     const progress = loadProgress();
     return `
     <h2>Levels</h2>
+    <p class="note">Finish a level to open the next one.</p>
     <div class="grid-levels">
       ${LEVELS.map((l, i) => {
         const p = progress[l.id];
-        return `<button type="button" data-act="pick" data-i="${i}" class="${i === game.index ? 'current' : ''}">
+        if (!isUnlocked(progress, i)) {
+          return `<button type="button" disabled aria-label="Level ${i + 1}, locked">
+            <span class="n">${i + 1}</span><span class="name">${l.name}</span><span class="lock">${LOCK} Locked</span></button>`;
+        }
+        const current = game.screen === 'game' && i === game.index;
+        return `<button type="button" data-act="pick" data-i="${i}" class="${current ? 'current' : ''}">
           <span class="n">${i + 1}</span><span class="name">${l.name}</span>
           <span class="got">${p ? '★'.repeat(p.stars) + '☆'.repeat(3 - p.stars) : '☆☆☆'}</span></button>`;
       }).join('')}
     </div>
-    <div class="row"><button class="btn" data-act="close" type="button">Back to the level</button></div>`;
+    <div class="row"><button class="btn" data-act="close" type="button">Back</button></div>`;
   },
   settings: () => {
     const rows = summariseLog();
@@ -385,7 +450,7 @@ const CARDS = {
       <li>Let go and the machine levels out; marbles slow to a stop.</li>
       <li>A marble only rolls along its own groove.</li>
       <li>Get every marble into the ring of its colour before time runs out.</li>
-      <li>A marble resting on a metal plate holds the matching gate open. A goal with a metal band opens its gate once filled.</li>
+      <li>A marble resting on a metal plate holds the gate at the other end of its cable open. A goal with a metal band opens its gate once filled.</li>
     </ul>
     <h3>Playtest options</h3>
     <div class="setting"><label>Clock starts<small>Compare both with testers</small></label>
@@ -403,10 +468,13 @@ const CARDS = {
         <button type="button" data-set="sound" data-v="true" aria-pressed="${settings.sound}">On</button>
         <button type="button" data-set="sound" data-v="false" aria-pressed="${!settings.sound}">Off</button>
       </span></div>
+    <div class="setting"><label>Progress<small>Locks every level but the first again, for the next tester</small></label>
+      <button class="btn small" data-act="resetProgress" type="button">Reset progress</button></div>
     <h3>Feel tuning</h3>
     ${slider('gravity', 'Marble speed (gravity)', PHYSICS.gravity, 12, 60, 1, PHYSICS)}
     ${slider('maxTiltDeg', 'Max tilt (degrees)', PHYSICS.maxTiltDeg, 10, 25, 1, PHYSICS)}
     ${slider('dragBraking', 'Brake when you let go', PHYSICS.dragBraking, 2, 12, 0.5, PHYSICS)}
+    ${slider('tiltResponse', 'Tilt responsiveness', CONTROLS.tiltResponse, 10, 45, 1, CONTROLS)}
     ${slider('dragForFullTilt', 'Drag distance for full tilt', CONTROLS.dragForFullTilt, 0.08, 0.3, 0.01, CONTROLS)}
     <p class="note ${game.solutionOk ? 'ok' : 'bad'}" id="solutionNote">${solutionNote()}</p>
     <div class="row">
@@ -422,7 +490,7 @@ const CARDS = {
       <button class="btn small" data-act="copyLog" type="button">Copy log</button>
       <button class="btn small" data-act="clearLog" type="button">Clear log</button>
     </div>
-    <div class="row"><button class="btn primary" data-act="close" type="button">Back to the level</button></div>`;
+    <div class="row"><button class="btn primary" data-act="close" type="button">Back</button></div>`;
   },
 };
 
@@ -484,9 +552,11 @@ function summariseLog() {
 
 function start(data = {}) {
   view.resize();
-  const progress = loadProgress();
-  const firstUnsolved = LEVELS.findIndex((l) => !progress[l.id]);
-  loadLevel(typeof data.index === 'number' ? data.index : Math.max(0, firstUnsolved));
+  if (data.screen === 'game' && typeof data.index === 'number' && isUnlocked(loadProgress(), data.index)) {
+    play(data.index);
+  } else {
+    showHome();
+  }
   requestAnimationFrame((t) => {
     last = t;
     requestAnimationFrame(frame);
@@ -494,9 +564,9 @@ function start(data = {}) {
 }
 
 const hot = window.claude?.hot;
-hot?.snapshot?.(() => ({ index: game.index }));
+hot?.snapshot?.(() => ({ index: game.index, screen: game.screen }));
 if (hot?.ready) hot.ready(start);
 else start(hot?.data ?? {});
 
 // For automated checks and debugging in the browser console.
-window.__mmr = { game, loadLevel, restart, LEVELS };
+window.__mmr = { game, play, showHome, restart, LEVELS };

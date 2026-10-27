@@ -8,7 +8,7 @@ const head = html
   .match(/<head>([\s\S]*?)<\/head>/)[1]
   .replace(/<meta charset[^>]*>\s*/i, '')
   .replace(/<meta name="viewport"[^>]*>\s*/i, '');
-const body = html.match(/<body>([\s\S]*?)<\/body>/)[1];
+const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/)[1]; // body attributes are set by the script
 
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/index.html', `${head.trim()}\n${body.trim()}\n`);

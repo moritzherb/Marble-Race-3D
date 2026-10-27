@@ -7,11 +7,12 @@ This tests the single biggest risk before any more art or content: **can a first
 - Their own phones if possible. Send them the prototype link.
 
 ## Procedure (about 15 minutes each)
-1. Give no instructions beyond "this is a puzzle game, think out loud". The level hints are part of the test.
-2. Let them play levels 1–6 in order.
-3. **Prediction check:** on levels 2, 5 and 6, pause them before a move (Settings pauses the clock). Ask "what will each marble do if you drag that way?", then let them do it. Note whether they were right.
-4. **Timer variant:** let half the testers play with *Clock starts: When it appears* (the default) and half with *On first tilt*. Switch it in Settings before they start.
-5. At the end, open Settings, then *Copy log*, and paste the log into a file named after the tester.
+1. Before each new tester, open Settings, tap Reset progress twice (levels unlock in order, so everyone starts at level 1), and clear the log once you have copied it.
+2. Give no instructions beyond "this is a puzzle game, think out loud". The level hints are part of the test.
+3. Let them press Play and continue through levels 1–6.
+4. **Prediction check:** on levels 2, 5 and 6, pause them before a move (Settings pauses the clock). Ask "what will each marble do if you drag that way?", then let them do it. Note whether they were right.
+5. **Timer variant:** let half the testers play with *Clock starts: When it appears* (the default) and half with *On first tilt*. Switch it in Settings before they start.
+6. At the end, open Settings, then *Copy log*, and paste the log into a file named after the tester.
 
 ## What to watch for
 - Do they drag deliberately, or shake the phone at random?

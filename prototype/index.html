@@ -7,7 +7,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&display=swap">
 <style>
   /* Layout: full-screen 3D stage; HUD pinned to the top and bottom edges; cards float over a teal scrim. */
   :root {
@@ -21,8 +21,8 @@
     --alarm: #d8432b;
     --gold: #e0a92e;
     --scrim: rgba(18, 74, 77, 0.55);
-    --font-display: 'Fredoka', 'Trebuchet MS', 'Segoe UI', sans-serif;
-    --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+    --font-display: 'Arimo', Arial, 'Helvetica Neue', sans-serif;
+    --font-body: 'Arimo', Arial, 'Helvetica Neue', sans-serif;
     color-scheme: light;
   }
   [hidden] { display: none !important; }
@@ -84,7 +84,7 @@
   .top .right { justify-self: end; }
   .clock { text-align: center; color: #fff; }
   .clock .num {
-    font: 600 44px/1 var(--font-display);
+    font: 700 44px/1 var(--font-display);
     font-variant-numeric: tabular-nums;
     text-shadow: 0 2px 0 var(--table-deep);
     letter-spacing: 0.5px;
@@ -122,14 +122,15 @@
   }
   .chip-marble.home { background: var(--c); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
   .hint {
-    max-width: 30em;
-    background: rgba(255, 255, 255, 0.92);
+    max-width: min(19rem, 100%);
+    background: rgba(255, 255, 255, 0.9);
     color: var(--ink);
-    padding: 8px 14px;
-    border-radius: 12px;
+    padding: 5px 11px;
+    border-radius: 9px;
     text-align: center;
-    font-size: 14px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    font-size: 12.5px;
+    line-height: 1.3;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
     transition: opacity 0.4s;
   }
   .hint.gone { opacity: 0; }
@@ -216,6 +217,9 @@
     min-width: 0;
   }
   .grid-levels button.current { outline: 3px solid var(--go); }
+  .grid-levels button:disabled { cursor: not-allowed; background: transparent; box-shadow: inset 0 0 0 2px var(--maple-edge); color: var(--ink-soft); }
+  .grid-levels .lock { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+  .grid-levels .lock svg { width: 13px; height: 13px; }
   .grid-levels .n { font: 600 22px/1 var(--font-display); }
   .grid-levels .name { font-size: 13px; line-height: 1.2; }
   .grid-levels .got { font-size: 13px; color: var(--gold); letter-spacing: 1px; }
@@ -238,17 +242,54 @@
   th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--maple-edge); white-space: nowrap; }
   th { color: var(--ink-soft); font-weight: 700; }
   ul.howto { margin: 0; padding-left: 18px; color: var(--ink-soft); display: grid; gap: 4px; }
+  /* Home screen: the next machine turns slowly behind a big Play button. */
+  body.at-home :is(.top, .sub, .bottom, .banner),
+  body:has(#home:not([hidden])) :is(.top, .sub, .bottom, .banner) { display: none; }
+  .home {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding-block: calc(env(safe-area-inset-top, 0px) + 28px) calc(env(safe-area-inset-bottom, 0px) + 22px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: linear-gradient(to bottom, rgba(23, 96, 99, 0.5), rgba(23, 96, 99, 0) 28%, rgba(23, 96, 99, 0) 72%, rgba(23, 96, 99, 0.4));
+    pointer-events: none;
+    color: #fff;
+    text-align: center;
+  }
+  .home button { pointer-events: auto; }
+  .home h1 { margin: 0; font: 700 32px/1.1 var(--font-display); letter-spacing: 0.2px; text-wrap: balance; text-shadow: 0 2px 0 var(--table-deep); }
+  .home .progress { margin: 8px 0 0; font-size: 14px; opacity: 0.92; }
+  .home-play { display: grid; place-content: center; justify-items: center; gap: 16px; }
+  .next-card { display: grid; gap: 3px; padding: 8px 18px 10px; border-radius: 14px; background: rgba(18, 74, 77, 0.82); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
+  .home .next { margin: 0; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.85; }
+  .home .level { margin: 0; font: 700 19px/1.2 var(--font-display); }
+  .play {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 38px 18px 32px;
+    border-radius: 999px;
+    background: var(--maple);
+    color: var(--ink);
+    font: 700 26px/1 var(--font-display);
+    box-shadow: inset 0 -5px 0 var(--maple-edge), 0 10px 26px rgba(0, 0, 0, 0.22);
+  }
+  .play svg { width: 26px; height: 26px; color: var(--go); }
+  .play:active { transform: translateY(2px); box-shadow: inset 0 -2px 0 var(--maple-edge), 0 6px 16px rgba(0, 0, 0, 0.2); }
+  .home-foot { display: flex; justify-content: center; gap: 12px; }
   @media (prefers-reduced-motion: reduce) {
     .clock.low .num { animation: none; }
     .hint { transition: none; }
   }
 </style>
 </head>
-<body>
+<body class="at-home">
 <canvas id="stage" aria-label="The wooden marble machine. Drag to tilt it."></canvas>
 
 <header class="top">
-  <button class="token left" id="levelsBtn" type="button">Levels</button>
+  <button class="token left" id="homeBtn" type="button">Home</button>
   <div class="clock" id="clock" aria-live="off">
     <div class="num" id="time">20</div>
     <div class="bar"><i id="timeBar"></i></div>
@@ -272,6 +313,27 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v5h-5"/></svg>
   </button>
 </footer>
+
+<section class="home" id="home" aria-label="Home">
+  <div>
+    <h1>Marble Machine Rush</h1>
+    <p class="progress" id="homeProgress">0 of 10 levels complete</p>
+  </div>
+  <div class="home-play">
+    <div class="next-card">
+      <p class="next" id="homeNext">Next level</p>
+      <p class="level"><span id="homeNum">1</span> · <span id="homeName">First Tilt</span></p>
+    </div>
+    <button class="play" id="playBtn" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.87l12-7.5a1 1 0 0 0 0-1.74l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor"/></svg>
+      Play
+    </button>
+  </div>
+  <div class="home-foot">
+    <button class="token" id="homeLevels" type="button">Levels</button>
+    <button class="token" id="homeSettings" type="button">Settings</button>
+  </div>
+</section>
 
 <div class="banner" id="banner" hidden></div>
 <div class="scrim" id="scrim" hidden><section class="card" id="card" role="dialog" aria-modal="true"></section></div>

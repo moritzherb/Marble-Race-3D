@@ -33,9 +33,11 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 
 ## Controls
 
-- **Tilt:** drag anywhere with one finger. Marbles roll the way you drag. The tilt grows with drag distance, reaching full tilt at 16% of the screen's short side.
-- **Let go:** the machine eases back to level in about 0.1 s. This is the brake.
-- **Direction assist** (setting, on by default): snaps the tilt to the four groove directions (62° catch zones) or the four diagonals (28° zones).
+- **Tilt:** drag anywhere with one finger. Marbles roll the way you drag. The tilt grows with drag distance, reaching full tilt at 18% of the screen's short side.
+- **Floating anchor:** past that distance, the drag's starting point follows your finger like a floating joystick. Reversing direction responds immediately instead of first undoing a long drag.
+- **Smooth response:** the machine follows the finger on a critically damped spring. It eases in, arrives in about 0.2 s and never overshoots.
+- **Let go:** the machine eases back to level. This is the brake.
+- **Direction assist** (setting, on by default): snaps the tilt to the four groove directions (62° catch zones) or the four diagonals (28° zones). A little stickiness at zone edges stops the machine flicking between two directions.
 - **Camera:** fixed three-quarter view (50° down, 24° off the grid axis). Two buttons turn it in 90° steps; gravity doesn't change and dragging stays screen-relative.
 - **Keyboard** for desktop testers: arrows or WASD (two keys for a diagonal), R to restart.
 
@@ -49,8 +51,15 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 - **Wood:** light, procedural grain, five tint variants. Small gaps between blocks show the seams that make it read as a real toy.
 - **Grooves:** darker, shaded strips along the rails, so they read as carved channels.
 - **Marbles:** glossy, with a pale band so rolling is visible. Marbles inside tunnels show as coloured outlines through the wood.
-- **Mechanisms:** goals are a coloured ring and inlay. Plates and gates are metal (brass for link A, graphite for link B), and a thin wire arcs from each plate (or banded goal) to the gate it opens.
-- **Background:** teal backdrop. HUD in pale maple with Fredoka for numbers and Atkinson Hyperlegible for text.
+- **Junctions:** where grooves meet (T-junctions, crossings), the channels merge into one carved floor. No groove is drawn over another.
+- **Mechanisms:** goals are a coloured ring and inlay. Plates and gates are metal (brass for link A, graphite for link B). A cable is strung between two posts, one beside each plate (or banded goal) and one beside the gate it opens. When the gate is open, the cable glows and beads run along it towards the gate.
+- **Background:** teal backdrop. HUD in pale maple, with Arimo throughout.
+
+## Flow
+
+- **Home screen:** the app opens here. The next unfinished level turns slowly behind a central Play button, with Levels and Settings below.
+- **Progression:** levels unlock in order; finishing one opens the next. The level list shows locked levels.
+- **For testers:** Settings → Reset progress locks everything again for the next person.
 
 ## Biggest risk, and the first test
 

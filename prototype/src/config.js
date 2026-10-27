@@ -17,9 +17,9 @@ export const PHYSICS = {
 };
 
 export const CONTROLS = {
-  tiltEase: 0.06,       // seconds for the machine to catch up with your finger.
-  releaseEase: 0.08,    // seconds to ease back to level when you let go.
-  dragForFullTilt: 0.16, // fraction of the screen's short side you drag for full tilt.
+  tiltResponse: 26,     // how briskly the machine follows your finger (spring stiffness, 1/s).
+  releaseResponse: 22,  // how briskly it settles back to level when you let go.
+  dragForFullTilt: 0.18, // fraction of the screen's short side you drag for full tilt.
   directionAssist: true, // snap tilt to the 4 groove directions and 4 diagonals.
 };
 

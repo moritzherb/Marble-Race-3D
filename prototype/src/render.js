@@ -2,9 +2,8 @@
 // physics uses, so what you see is exactly what the marbles ride on.
 
 import * as THREE from './three.js';
-import { MARBLE_RADIUS } from './config.js';
-import { GROOVE_DEPTH_OFFSET, DEAD_END } from './pieces.js';
-import { sampleEdge } from './track.js';
+import { GROOVE_DEPTH_OFFSET } from './pieces.js';
+import { sampleEdge, tangentAwayFrom } from './track.js';
 import { machineRotation } from './tilt.js';
 
 export const MARBLE_COLORS = {
@@ -20,9 +19,15 @@ const BLOCK_INSET = 0.0125; // half the gap between neighbouring blocks
 const TOP = 1 - 2 * BLOCK_INSET * 0.6; // block top, a hair under the cell top
 const GROOVE_LIFT = TOP - (1 - GROOVE_DEPTH_OFFSET) + 0.004; // rail -> visible groove surface
 const GROOVE_HALF_WIDTH = 0.17;
-const R = MARBLE_RADIUS;
 const MARBLE_VIEW_R = 0.17; // drawn a little larger than the physics radius
 const MARBLE_LIFT = 0.06; // and sitting higher in the groove, so more of it shows
+const DEFAULT_YAW = (-24 * Math.PI) / 180;
+const POST_OFFSET = 0.31; // how far beside the groove a cable post stands
+const POST_HEIGHT = 0.32;
+
+// Groove shading: dark where the channel meets the block top, light along the middle.
+const SHADE_EDGE = [0.42, 0.3, 0.19];
+const SHADE_MID = [0.74, 0.57, 0.4];
 
 function woodTexture(seed) {
   const c = document.createElement('canvas');
@@ -63,8 +68,7 @@ function marbleTexture(hex) {
   c.width = 128;
   c.height = 64;
   const g = c.getContext('2d');
-  const col = new THREE.Color(hex);
-  g.fillStyle = `#${col.getHexString()}`;
+  g.fillStyle = `#${new THREE.Color(hex).getHexString()}`;
   g.fillRect(0, 0, 128, 64);
   // A pale band around the equator so you can see the marble roll.
   g.fillStyle = 'rgba(255,255,255,0.55)';
@@ -79,16 +83,17 @@ function marbleTexture(hex) {
 // A soft studio environment for reflections on the glass marbles.
 function studioEnvironment(renderer) {
   const scene = new THREE.Scene();
-  const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(10, 32, 16),
-    new THREE.ShaderMaterial({
-      side: THREE.BackSide,
-      vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader:
-        'varying vec3 p; void main(){ float h = normalize(p).y * 0.5 + 0.5; gl_FragColor = vec4(mix(vec3(0.16,0.55,0.56), vec3(1.0,0.98,0.94), h), 1.0); }',
-    }),
+  scene.add(
+    new THREE.Mesh(
+      new THREE.SphereGeometry(10, 32, 16),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader:
+          'varying vec3 p; void main(){ float h = normalize(p).y * 0.5 + 0.5; gl_FragColor = vec4(mix(vec3(0.16,0.55,0.56), vec3(1.0,0.98,0.94), h), 1.0); }',
+      }),
+    ),
   );
-  scene.add(sky);
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   panel.position.set(-3, 6, 3);
   panel.lookAt(0, 0, 0);
@@ -135,32 +140,133 @@ function wedgeGeometry() {
   return geo;
 }
 
-// A strip along a rail, darker at the edges so it reads as a carved channel.
-function grooveGeometry(points) {
+// Part of a polyline, from distance `from` to distance `to` along it.
+function slice(pts, from, to) {
+  const out = [];
+  let run = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const seg = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    const lerp = (d) => {
+      const f = Math.min(1, Math.max(0, (d - run) / (seg || 1)));
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+    };
+    if (run + seg > from + 1e-6 && run < to - 1e-6) {
+      if (out.length === 0) out.push(lerp(Math.max(from, run)));
+      out.push(lerp(Math.min(to, run + seg)));
+    }
+    run += seg;
+  }
+  return out;
+}
+
+function sideOf(t) {
+  if (Math.abs(t[0]) > Math.abs(t[2])) return t[0] > 0 ? 'E' : 'W';
+  return t[2] > 0 ? 'S' : 'N';
+}
+
+// All grooves of a machine as one carved surface. Where grooves meet (T-junctions and
+// crossings) a shared floor patch is drawn instead of overlapping strips, so the
+// channels merge like real carving; open sides of a junction keep their wall shading.
+function grooveGeometry(track) {
   const pos = [];
   const col = [];
   const uv = [];
-  const edge = [0.42, 0.3, 0.19];
-  const mid = [0.74, 0.57, 0.4];
-  let run = 0;
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
-    const q = points[Math.min(i + 1, points.length - 1)];
-    const o = points[Math.max(i - 1, 0)];
-    const dir = new THREE.Vector3(q[0] - o[0], 0, q[2] - o[2]).normalize();
-    const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(GROOVE_HALF_WIDTH);
-    const y = p[1] + GROOVE_LIFT;
-    if (i > 0) run += Math.hypot(p[0] - o[0], p[2] - o[2]);
-    pos.push(p[0] + side.x, y, p[2] + side.z, p[0], y, p[2], p[0] - side.x, y, p[2] - side.z);
-    col.push(...edge, ...mid, ...edge);
-    uv.push(run, 0, run, 0.5, run, 1);
-  }
   const index = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = i * 3;
-    const b = (i + 1) * 3;
-    index.push(a, b, a + 1, a + 1, b, b + 1, a + 1, b + 1, a + 2, a + 2, b + 1, b + 2);
+  const h = GROOVE_HALF_WIDTH;
+  const vert = (x, y, z, c) => {
+    pos.push(x, y, z);
+    col.push(...c);
+    uv.push(x * 0.8, z * 0.8);
+    return pos.length / 3 - 1;
+  };
+
+  function strip(points) {
+    if (points.length < 2) return;
+    let prev = null;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const q = points[Math.min(i + 1, points.length - 1)];
+      const o = points[Math.max(i - 1, 0)];
+      const dl = Math.hypot(q[0] - o[0], q[2] - o[2]) || 1;
+      const sx = (-(q[2] - o[2]) / dl) * h;
+      const sz = ((q[0] - o[0]) / dl) * h;
+      const y = p[1] + GROOVE_LIFT;
+      const row = [vert(p[0] + sx, y, p[2] + sz, SHADE_EDGE), vert(p[0], y, p[2], SHADE_MID), vert(p[0] - sx, y, p[2] - sz, SHADE_EDGE)];
+      if (prev) {
+        const [a, a1, a2] = prev;
+        const [b, b1, b2] = row;
+        index.push(a, b, a1, a1, b, b1, a1, b1, a2, a2, b1, b2);
+      }
+      prev = row;
+    }
   }
+
+  // A 3×3 grid of vertices over the junction square. Corners are always edge-dark;
+  // a side's middle is light where a groove leaves through it and dark where it is wall.
+  function patch(c, arms) {
+    const y = c[1] + GROOVE_LIFT;
+    const ids = {};
+    for (let j = -1; j <= 1; j++) {
+      for (let i = -1; i <= 1; i++) {
+        let shade = SHADE_MID;
+        if (i !== 0 && j !== 0) shade = SHADE_EDGE;
+        else if (i !== 0 || j !== 0) {
+          const side = i === 1 ? 'E' : i === -1 ? 'W' : j === 1 ? 'S' : 'N';
+          shade = arms.has(side) ? SHADE_MID : SHADE_EDGE;
+        }
+        ids[`${i},${j}`] = vert(c[0] + i * h, y, c[2] + j * h, shade);
+      }
+    }
+    for (const [i0, j0] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
+      const a = ids[`${i0},${j0}`];
+      const b = ids[`${i0},${j0 + 1}`];
+      const c2 = ids[`${i0 + 1},${j0 + 1}`];
+      const d = ids[`${i0 + 1},${j0}`];
+      index.push(a, b, c2, a, c2, d);
+    }
+  }
+
+  // A half-disc closing a dead end, shaded to continue the strip it ends.
+  function cap(p, dirIn) {
+    const y = p[1] + GROOVE_LIFT;
+    const centre = vert(p[0], y, p[2], SHADE_MID);
+    const side = [-dirIn[2], dirIn[0]];
+    const rim = [];
+    for (let k = 0; k <= 12; k++) {
+      const a = -Math.PI / 2 + (Math.PI * k) / 12;
+      const dx = dirIn[0] * Math.cos(a) + side[0] * Math.sin(a);
+      const dz = dirIn[2] * Math.cos(a) + side[1] * Math.sin(a);
+      rim.push(vert(p[0] + dx * h, y, p[2] + dz * h, SHADE_EDGE));
+    }
+    for (let k = 0; k < rim.length - 1; k++) index.push(centre, rim[k + 1], rim[k]);
+  }
+
+  const crossings = new Set(track.pieces.filter((p) => p.type === 'cross').map((p) => p.index));
+  const crossCentres = new Map();
+  for (const edge of track.edges) {
+    const deg0 = track.nodes[edge.n0].links.length;
+    const deg1 = track.nodes[edge.n1].links.length;
+    if (crossings.has(edge.piece)) {
+      strip(slice(edge.pts, 0, edge.L / 2 - h));
+      strip(slice(edge.pts, edge.L / 2 + h, edge.L));
+      crossCentres.set(edge.piece, sampleEdge(edge, edge.L / 2).pos);
+    } else {
+      strip(slice(edge.pts, deg0 >= 3 ? h : 0, edge.L - (deg1 >= 3 ? h : 0)));
+    }
+    for (const [end, deg] of [[0, deg0], [1, deg1]]) {
+      if (deg !== 1) continue;
+      const away = tangentAwayFrom(edge, end);
+      cap(end === 0 ? edge.pts[0] : edge.pts[edge.pts.length - 1], [-away[0], 0, -away[2]]);
+    }
+  }
+  for (const node of track.nodes) {
+    if (node.links.length < 3) continue;
+    patch(node.pos, new Set(node.links.map((l) => sideOf(tangentAwayFrom(track.edges[l.edge], l.end)))));
+  }
+  for (const c of crossCentres.values()) patch(c, new Set(['E', 'W', 'N', 'S']));
+
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -171,8 +277,10 @@ function grooveGeometry(points) {
 }
 
 export function createView(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
+  let pixelRatio = maxRatio;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(pixelRatio);
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -186,10 +294,10 @@ export function createView(canvas) {
   scene.add(new THREE.HemisphereLight(0xfff6e8, 0x2b8f92, 1.1));
   const sun = new THREE.DirectionalLight(0xffffff, 2.4);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  const smallScreen = Math.min(window.screen?.width || 1000, window.screen?.height || 1000) < 900;
+  sun.shadow.mapSize.set(smallScreen ? 1024 : 2048, smallScreen ? 1024 : 2048);
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
-  sun.shadow.radius = 3;
   scene.add(sun, sun.target);
 
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.16 }));
@@ -210,31 +318,69 @@ export function createView(canvas) {
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
   });
-  const capMat = new THREE.MeshStandardMaterial({
-    map: grooveMat.map,
-    color: new THREE.Color(0.6, 0.46, 0.32),
-    roughness: 0.5,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
-  });
   const cubeGeo = new THREE.BoxGeometry(1 - 2 * BLOCK_INSET, TOP, 1 - 2 * BLOCK_INSET);
   cubeGeo.translate(0, TOP / 2, 0);
   const wedgeGeo = wedgeGeometry();
   const marbleGeo = new THREE.SphereGeometry(MARBLE_VIEW_R, 32, 18);
+  const postGeo = new THREE.CylinderGeometry(0.026, 0.036, POST_HEIGHT, 10);
+  postGeo.translate(0, POST_HEIGHT / 2, 0);
+  const knobGeo = new THREE.SphereGeometry(0.05, 14, 10);
+  const beadGeo = new THREE.SphereGeometry(0.03, 10, 8);
+  const shared = new Set([cubeGeo, wedgeGeo, marbleGeo, postGeo, knobGeo, beadGeo]);
 
   let pivot = null; // tilts around the machine's centre
   let content = null; // machine coordinates live here
   let current = null; // per-level objects
-  const view = { yaw: (-24 * Math.PI) / 180, targetYaw: (-24 * Math.PI) / 180, pitch: (50 * Math.PI) / 180, distance: 12, center: new THREE.Vector3() };
+  let clock = 0;
+  const view = { yaw: DEFAULT_YAW, targetYaw: DEFAULT_YAW, pitch: (50 * Math.PI) / 180, distance: 12, center: new THREE.Vector3(), spin: false };
 
   function clearLevel() {
     if (!pivot) return;
     scene.remove(pivot);
     pivot.traverse((o) => {
-      if (o.geometry && o.geometry !== cubeGeo && o.geometry !== wedgeGeo && o.geometry !== marbleGeo) o.geometry.dispose();
+      if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
+      if (o.isInstancedMesh) o.dispose();
     });
     pivot = null;
+  }
+
+  // Wood blocks: one instanced mesh per shape and wood tint keeps draw calls low.
+  function addBlocks(track) {
+    const groups = new Map();
+    let n = 0;
+    for (const piece of track.pieces) {
+      const wedge = piece.type === 'ramp';
+      const mat = (piece.anchor[0] * 7 + piece.anchor[1] * 3 + piece.anchor[2] * 5 + n++) % woodMats.length;
+      const key = `${wedge ? 'w' : 'c'}${mat}`;
+      if (!groups.has(key)) groups.set(key, { geo: wedge ? wedgeGeo : cubeGeo, mat: woodMats[mat], list: [] });
+      const m = new THREE.Matrix4().makeRotationY((-piece.r * Math.PI) / 2);
+      m.setPosition(piece.anchor[0] + 0.5, piece.anchor[1], piece.anchor[2] + 0.5);
+      groups.get(key).list.push(m);
+    }
+    for (const { geo, mat, list } of groups.values()) {
+      const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach((m, i) => mesh.setMatrixAt(i, m));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      content.add(mesh);
+    }
+  }
+
+  // A brass post standing on the block top beside a groove, on the side facing `towards`.
+  function addPost(surface, tangent, towards, color) {
+    const side = new THREE.Vector3(-tangent[2], 0, tangent[0]).normalize();
+    const a = surface.clone().addScaledVector(side, POST_OFFSET);
+    const b = surface.clone().addScaledVector(side, -POST_OFFSET);
+    const base = a.distanceToSquared(towards) <= b.distanceToSquared(towards) ? a : b;
+    const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.8, roughness: 0.3, emissive: color, emissiveIntensity: 0 });
+    const post = new THREE.Mesh(postGeo, mat);
+    post.position.copy(base);
+    post.castShadow = true;
+    const knob = new THREE.Mesh(knobGeo, mat);
+    knob.position.copy(base).setY(base.y + POST_HEIGHT);
+    knob.castShadow = true;
+    content.add(post, knob);
+    return { top: knob.position.clone(), mat };
   }
 
   function build(track) {
@@ -250,36 +396,12 @@ export function createView(canvas) {
     scene.add(pivot);
     floor.position.y = min[1] - 2.2;
 
-    // Wood.
-    let n = 0;
-    for (const piece of track.pieces) {
-      const isWedge = piece.type === 'ramp';
-      const mesh = new THREE.Mesh(isWedge ? wedgeGeo : cubeGeo, woodMats[(piece.anchor[0] * 7 + piece.anchor[1] * 3 + piece.anchor[2] * 5 + n++) % woodMats.length]);
-      mesh.position.set(piece.anchor[0] + 0.5, piece.anchor[1], piece.anchor[2] + 0.5);
-      mesh.rotation.y = (-piece.r * Math.PI) / 2;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      content.add(mesh);
-    }
+    addBlocks(track);
+    const grooves = new THREE.Mesh(grooveGeometry(track), grooveMat);
+    grooves.receiveShadow = true;
+    content.add(grooves);
 
-    // Grooves, with a round cap at every dead end.
-    const capGeo = new THREE.CircleGeometry(GROOVE_HALF_WIDTH, 20);
-    capGeo.rotateX(-Math.PI / 2);
-    for (const edge of track.edges) {
-      const groove = new THREE.Mesh(grooveGeometry(edge.pts), grooveMat);
-      groove.receiveShadow = true;
-      content.add(groove);
-      for (const [end, nodeId] of [[0, edge.n0], [1, edge.n1]]) {
-        if (track.nodes[nodeId].links.length !== 1) continue;
-        const p = end === 0 ? edge.pts[0] : edge.pts[edge.pts.length - 1];
-        const cap = new THREE.Mesh(capGeo, capMat);
-        cap.position.set(p[0], p[1] + GROOVE_LIFT, p[2]);
-        cap.receiveShadow = true;
-        content.add(cap);
-      }
-    }
-
-    // Goals: a coloured ring around the cup.
+    // Goals: a coloured ring and inlay at the end of the groove.
     const goals = track.goals.map((goal) => {
       const edge = track.edges[goal.edge];
       const p = edge.pts[edge.pts.length - 1];
@@ -302,19 +424,19 @@ export function createView(canvas) {
         band.position.copy(ring.position);
         content.add(band);
       }
-      return { mat, ring, pos: new THREE.Vector3(p[0], p[1] + GROOVE_LIFT, p[2]) };
+      return { mat, surface: new THREE.Vector3(p[0], p[1] + GROOVE_LIFT, p[2]), tangent: sampleEdge(edge, edge.L).tangent };
     });
 
     // Plates: a metal disc where the marble rests.
     const plates = track.plates.map((plate) => {
       const edge = track.edges[plate.edge];
-      const { pos } = sampleEdge(edge, edge.L - 0.08);
+      const { pos, tangent } = sampleEdge(edge, edge.L - 0.08);
       const mat = new THREE.MeshStandardMaterial({ color: LINK_COLORS[plate.link], metalness: 0.85, roughness: 0.3, emissive: LINK_COLORS[plate.link], emissiveIntensity: 0 });
       const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.03, 28), mat);
       disc.position.set(pos[0], pos[1] + GROOVE_LIFT + 0.006, pos[2]);
       disc.receiveShadow = true;
       content.add(disc);
-      return { mat, disc, baseY: disc.position.y, pos: new THREE.Vector3(pos[0], pos[1] + GROOVE_LIFT, pos[2]) };
+      return { mat, disc, baseY: disc.position.y, surface: new THREE.Vector3(pos[0], pos[1] + GROOVE_LIFT, pos[2]), tangent };
     });
 
     // Gates: a metal slab across the groove that sinks into the wood when open.
@@ -328,25 +450,39 @@ export function createView(canvas) {
       slab.position.set(pos[0], top + 0.12, pos[2]);
       slab.castShadow = true;
       content.add(slab);
-      return { slab, closedY: top + 0.12, openY: top - 0.2, y: top + 0.12, pos: new THREE.Vector3(pos[0], top, pos[2]) };
+      return { slab, closedY: top + 0.12, openY: top - 0.2, y: top + 0.12, surface: new THREE.Vector3(pos[0], top, pos[2]), tangent };
     });
 
-    // A thin wire arching from each plate (or linked goal) to the gate it opens.
-    const wires = [];
+    // Cables: each plate (or banded goal) and its gate get a brass post beside the groove,
+    // with a cable strung between the post tops. Nothing hangs when the gate sinks.
+    const cables = [];
     track.gates.forEach((gate, gi) => {
       const sources = [
-        ...plates.filter((_, i) => track.plates[i].link === gate.link).map((p) => p.pos),
-        ...goals.filter((_, i) => track.goals[i].link === gate.link).map((g) => g.pos),
+        ...plates.filter((_, i) => track.plates[i].link === gate.link),
+        ...goals.filter((_, i) => track.goals[i].link === gate.link),
       ];
-      for (const from of sources) {
-        const to = gates[gi].pos;
-        const mid = from.clone().add(to).multiplyScalar(0.5);
-        mid.y = Math.max(from.y, to.y) + 0.7 + from.distanceTo(to) * 0.12;
-        const curve = new THREE.QuadraticBezierCurve3(from.clone().setY(from.y + 0.05), mid, to.clone().setY(to.y + 0.3));
-        const mat = new THREE.MeshBasicMaterial({ color: LINK_COLORS[gate.link], transparent: true, opacity: 0.6 });
-        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.028, 8), mat);
-        content.add(tube);
-        wires.push({ gate: gi, mat });
+      if (!sources.length) return;
+      const color = LINK_COLORS[gate.link];
+      const towards = sources.reduce((acc, s) => acc.add(s.surface), new THREE.Vector3()).multiplyScalar(1 / sources.length);
+      const gatePost = addPost(gates[gi].surface, gates[gi].tangent, towards, color);
+      for (const src of sources) {
+        const srcPost = addPost(src.surface, src.tangent, gatePost.top, color);
+        const a = srcPost.top;
+        const b = gatePost.top;
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+        mid.y = Math.max(a.y, b.y) + 0.22 + a.distanceTo(b) * 0.1;
+        const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+        const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.45, emissive: color, emissiveIntensity: 0 });
+        const cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.016, 6), mat);
+        cable.castShadow = true;
+        content.add(cable);
+        const beads = [0, 1, 2].map(() => {
+          const bead = new THREE.Mesh(beadGeo, new THREE.MeshBasicMaterial({ color: 0xfff3cf }));
+          bead.visible = false;
+          content.add(bead);
+          return bead;
+        });
+        cables.push({ gate: gi, curve, mat, beads, posts: [srcPost.mat, gatePost.mat] });
       }
     });
 
@@ -365,7 +501,7 @@ export function createView(canvas) {
       ghost.renderOrder = 10;
       ghost.scale.setScalar(1.08);
       content.add(mesh, ghost);
-      return { mesh, ghost, settled: 0 };
+      return { mesh, ghost, prev: new THREE.Vector3(), placed: false };
     });
 
     // Light and shadow sized to the machine.
@@ -379,7 +515,7 @@ export function createView(canvas) {
     cam.far = size * 4;
     cam.updateProjectionMatrix();
 
-    current = { track, goals, plates, gates, wires, marbles, size };
+    current = { track, goals, plates, gates, cables, marbles };
     fitCamera();
   }
 
@@ -395,15 +531,15 @@ export function createView(canvas) {
     if (!current) return;
     const { min, max } = current.track.bounds;
     const { fwd, right, up } = cameraBasis(view.targetYaw);
-    const vHalf = THREE.MathUtils.degToRad(camera.fov / 2) * 0.8;
-    const tanV = Math.tan(vHalf);
+    const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2) * 0.8);
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect * 0.96;
     let d = 4;
     const pad = 0.25;
+    const p = new THREE.Vector3();
     for (const x of [min[0] - pad, max[0] + pad]) {
       for (const y of [min[1], max[1] + 0.4]) {
         for (const z of [min[2] - pad, max[2] + pad]) {
-          const p = new THREE.Vector3(x, y, z).sub(view.center);
+          p.set(x, y, z).sub(view.center);
           const depth = p.dot(fwd);
           d = Math.max(d, Math.abs(p.dot(right)) / tanH - depth, Math.abs(p.dot(up)) / tanV - depth);
         }
@@ -420,52 +556,87 @@ export function createView(canvas) {
 
   const tmpQ = new THREE.Quaternion();
   const tmpAxis = new THREE.Vector3();
+  const tmpDir = new THREE.Vector3();
 
   // Bring the scene up to date with the simulation.
   function sync(sim, tiltVec, dt) {
     if (!current) return;
+    clock += dt;
     const { axis, angle } = machineRotation(tiltVec);
     pivot.quaternion.setFromAxisAngle(tmpAxis.set(axis[0], axis[1], axis[2]).normalize(), angle);
 
     sim.marbles.forEach((m, i) => {
-      const view3 = current.marbles[i];
-      const prev = view3.mesh.position.clone();
-      view3.mesh.position.set(m.pos[0], m.pos[1] + MARBLE_LIFT, m.pos[2]);
-      const moved = view3.mesh.position.distanceTo(prev);
+      const vis = current.marbles[i];
+      vis.prev.copy(vis.mesh.position);
+      vis.mesh.position.set(m.pos[0], m.pos[1] + MARBLE_LIFT, m.pos[2]);
+      const moved = vis.placed ? vis.mesh.position.distanceTo(vis.prev) : 0;
+      vis.placed = true;
       if (moved > 1e-5 && moved < 1) {
-        const dir = view3.mesh.position.clone().sub(prev).normalize();
-        tmpAxis.set(dir.z, 0, -dir.x).normalize();
-        if (tmpAxis.lengthSq() > 0.5) {
-          tmpQ.setFromAxisAngle(tmpAxis, moved / MARBLE_VIEW_R);
-          view3.mesh.quaternion.premultiply(tmpQ);
+        tmpDir.copy(vis.mesh.position).sub(vis.prev).normalize();
+        tmpAxis.set(tmpDir.z, 0, -tmpDir.x);
+        if (tmpAxis.lengthSq() > 0.25) {
+          tmpQ.setFromAxisAngle(tmpAxis.normalize(), moved / MARBLE_VIEW_R);
+          vis.mesh.quaternion.premultiply(tmpQ);
         }
       }
-      view3.ghost.position.copy(view3.mesh.position);
-      view3.ghost.visible = !m.delivered;
+      vis.ghost.position.copy(vis.mesh.position);
+      vis.ghost.visible = !m.delivered;
     });
 
+    const ease = (rate) => Math.min(1, dt * rate);
     sim.goals.forEach((g, i) => {
-      const target = g.filled ? 1.2 : 0.05;
       const mat = current.goals[i].mat;
-      mat.emissiveIntensity += (target - mat.emissiveIntensity) * Math.min(1, dt * 6);
+      mat.emissiveIntensity += ((g.filled ? 1.2 : 0.05) - mat.emissiveIntensity) * ease(6);
     });
     sim.plates.forEach((p, i) => {
       const vis = current.plates[i];
-      vis.disc.position.y += ((p.pressed ? vis.baseY - 0.02 : vis.baseY) - vis.disc.position.y) * Math.min(1, dt * 14);
+      vis.disc.position.y += ((p.pressed ? vis.baseY - 0.02 : vis.baseY) - vis.disc.position.y) * ease(14);
       vis.mat.emissiveIntensity = p.pressed ? 0.35 : 0;
     });
     sim.gates.forEach((g, i) => {
       const vis = current.gates[i];
-      vis.y += ((g.open ? vis.openY : vis.closedY) - vis.y) * Math.min(1, dt * 12);
+      vis.y += ((g.open ? vis.openY : vis.closedY) - vis.y) * ease(12);
       vis.slab.position.y = vis.y;
     });
-    for (const w of current.wires) w.mat.opacity = sim.gates[w.gate].open ? 0.95 : 0.55;
+    for (const c of current.cables) {
+      const open = sim.gates[c.gate].open;
+      const glow = open ? 0.55 : 0;
+      c.mat.emissiveIntensity += (glow - c.mat.emissiveIntensity) * ease(8);
+      for (const m of c.posts) m.emissiveIntensity = c.mat.emissiveIntensity * 0.6;
+      c.beads.forEach((bead, k) => {
+        bead.visible = open;
+        if (open) bead.position.copy(c.curve.getPointAt((clock * 0.45 + k / 3) % 1));
+      });
+    }
+  }
+
+  // Lower the render resolution if the device can't keep up, so the tilt stays smooth.
+  const perf = { time: 0, frames: 0 };
+  function adaptResolution(dt) {
+    perf.time += dt;
+    perf.frames++;
+    if (perf.frames < 90) return;
+    const avg = perf.time / perf.frames;
+    perf.time = 0;
+    perf.frames = 0;
+    if (avg > 1 / 42 && pixelRatio > 1) {
+      pixelRatio = Math.max(1, pixelRatio - 0.25);
+      renderer.setPixelRatio(pixelRatio);
+      resize();
+    }
   }
 
   function frame(dt) {
-    view.yaw += (view.targetYaw - view.yaw) * Math.min(1, dt * 9);
+    if (view.spin) {
+      view.targetYaw += dt * 0.22;
+      view.yaw = view.targetYaw;
+      fitCamera();
+    } else {
+      view.yaw += (view.targetYaw - view.yaw) * Math.min(1, dt * 9);
+    }
     placeCamera();
     renderer.render(scene, camera);
+    adaptResolution(dt);
   }
 
   function resize() {
@@ -482,6 +653,17 @@ export function createView(canvas) {
     fitCamera();
   }
 
+  // Slowly circle the machine (home screen); when stopped, glide back to the default view.
+  function setSpin(on) {
+    if (on === view.spin) return;
+    view.spin = on;
+    if (!on) {
+      const turns = Math.round((view.yaw - DEFAULT_YAW) / (2 * Math.PI));
+      view.targetYaw = DEFAULT_YAW + turns * 2 * Math.PI;
+    }
+    fitCamera();
+  }
+
   // Turn a screen drag (pixels, y down) into a direction on the machine's ground plane.
   function screenToGround(dx, dy) {
     const { fwd, right } = cameraBasis(view.yaw);
@@ -490,5 +672,5 @@ export function createView(canvas) {
     return [dx * r.x - dy * f.x, dx * r.y - dy * f.y];
   }
 
-  return { build, sync, frame, resize, orbit, screenToGround, renderer };
+  return { build, sync, frame, resize, orbit, setSpin, screenToGround, renderer };
 }

@@ -25,32 +25,47 @@ export function directionVector(name, amount = 1) {
 
 // Snap a tilt to the nearest groove direction or diagonal. Groove directions get wider
 // catch zones (62°) than diagonals (28°) so a slightly-off drag still moves one axis only.
-export function assistDirection([x, z]) {
+// Passing the previous tilt adds a little stickiness, so a finger resting near a zone
+// boundary doesn't make the machine flick between two directions.
+const AXIS_HALF_WIDTH = 31;
+const DIAGONAL_HALF_WIDTH = 14;
+const STICKINESS = 7;
+
+function snappedAngle(deg) {
+  for (const axis of [0, 90, 180, 270, 360]) {
+    if (Math.abs(deg - axis) <= AXIS_HALF_WIDTH) return axis % 360;
+  }
+  return Math.round((deg - 45) / 90) * 90 + 45;
+}
+
+export function assistDirection([x, z], previous = null) {
   const m = Math.hypot(x, z);
   if (m < 1e-6) return [0, 0];
-  const angle = Math.atan2(z, x); // 0 = east, +90° = south
-  const deg = ((angle * 180) / Math.PI + 360) % 360;
-  const axisHalfWidth = 31;
-  for (const axis of [0, 90, 180, 270, 360]) {
-    if (Math.abs(deg - axis) <= axisHalfWidth) {
-      const a = (axis * Math.PI) / 180;
-      return [Math.cos(a) * m, Math.sin(a) * m];
-    }
+  const deg = ((Math.atan2(z, x) * 180) / Math.PI + 360) % 360; // 0 = east, 90 = south
+  let snapped = snappedAngle(deg);
+  if (previous && Math.hypot(previous[0], previous[1]) > 1e-6) {
+    const prevDeg = (Math.round((Math.atan2(previous[1], previous[0]) * 180) / Math.PI) + 360) % 360;
+    const halfWidth = prevDeg % 90 === 0 ? AXIS_HALF_WIDTH : DIAGONAL_HALF_WIDTH;
+    const off = Math.abs(((deg - prevDeg + 540) % 360) - 180);
+    if (off <= halfWidth + STICKINESS) snapped = prevDeg;
   }
-  const diag = Math.round((deg - 45) / 90) * 90 + 45;
-  const a = (diag * Math.PI) / 180;
+  const a = (snapped * Math.PI) / 180;
   return [Math.cos(a) * m, Math.sin(a) * m];
 }
 
 export function createTilt() {
-  return { current: [0, 0], target: [0, 0], holding: false };
+  return { current: [0, 0], velocity: [0, 0], target: [0, 0], holding: false };
 }
 
+// The machine follows the target on a critically damped spring: it starts moving
+// gently, arrives quickly and never overshoots. Call with small steps (SIM_DT).
 export function updateTilt(tilt, dt) {
-  const tau = tilt.holding ? CONTROLS.tiltEase : CONTROLS.releaseEase;
-  const k = 1 - Math.exp(-dt / tau);
-  tilt.current[0] += (tilt.target[0] - tilt.current[0]) * k;
-  tilt.current[1] += (tilt.target[1] - tilt.current[1]) * k;
+  const w = tilt.holding ? CONTROLS.tiltResponse : CONTROLS.releaseResponse;
+  for (let i = 0; i < 2; i++) {
+    const accel = w * w * (tilt.target[i] - tilt.current[i]) - 2 * w * tilt.velocity[i];
+    tilt.velocity[i] += accel * dt;
+    tilt.current[i] += tilt.velocity[i] * dt;
+  }
 }
 
 // Gravity in the machine's own coordinates. Tilting the machine by angle θ towards d

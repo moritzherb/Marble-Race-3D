@@ -44,6 +44,10 @@ export function recordResult(levelId, stars, time) {
   return progress;
 }
 
+export function resetProgress() {
+  write(KEYS.progress, {});
+}
+
 // One entry per attempt: how it ended, how long it took, how many times the player tilted.
 export function loadLog() {
   return read(KEYS.log, []);

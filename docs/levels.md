@@ -1,6 +1,6 @@
 # The first ten levels
 
-Every level is a different machine built from the same block kit. The data lives in `prototype/src/levels.js`. Each level ships with a scripted reference solution and, from level 4 on, "traps": wrong opening moves the level is designed to punish. `npm test` plays every solution and every trap headlessly.
+Every level is a different machine built from the same block kit. Levels unlock in order: finishing one opens the next. The data lives in `prototype/src/levels.js`. Each level ships with a scripted reference solution and, from level 4 on, "traps": wrong opening moves the level is designed to punish. `npm test` plays every solution and every trap headlessly.
 
 Timers are derived from the reference solution, so they stay fair when the physics is retuned:
 
@@ -14,14 +14,14 @@ The reference solution is an expert's run. First-time players need reading time,
 |---|---|---|---|---|---|---|---|
 | 1 | First Tilt | 1 | 5×4, 1 | 2.1 s | 20 s | 6 s | 4 s |
 | 2 | Two Grooves | 2 | 5×5, 1 | 2.2 s | 20 s | 6 s | 4 s |
-| 3 | Fork in the Road | 2 | 5×5, 1 | 3.0 s | 20 s | 7 s | 4 s |
+| 3 | Fork in the Road | 2 | 5×5, 1 | 3.0 s | 20 s | 7 s | 5 s |
 | 4 | Downhill Only | 2 | 6×4, 2 | 5.4 s | 27 s | 11 s | 7 s |
 | 5 | Counterweight | 2 | 5×5, 1 | 4.1 s | 23 s | 9 s | 6 s |
 | 6 | Hold the Door | 2 | 6×4, 1 | 6.4 s | 30 s | 12 s | 8 s |
 | 7 | Blue Goes First | 3 | 6×6, 2 | 6.6 s | 27 s | 12 s | 8 s |
-| 8 | Underpass | 3 | 5×6, 2 | 6.7 s | 27 s | 13 s | 8 s |
+| 8 | Underpass | 3 | 5×6, 2 | 6.7 s | 27 s | 12 s | 8 s |
 | 9 | Chain Reaction | 3 | 6×6, 1 | 5.8 s | 25 s | 11 s | 7 s |
-| 10 | The Machine | 4 | 6×8, 3 | 5.4 s | 22 s | 11 s | 7 s |
+| 10 | The Machine | 4 | 6×8, 3 | 5.5 s | 23 s | 11 s | 7 s |
 
 Directions below are grid directions. With the default camera, north is up the screen and east is to the right.
 

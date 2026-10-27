@@ -12,7 +12,11 @@ This prototype exists to answer one question before more is built: **can players
   ```
   It needs an internet connection the first time, to load three.js and the fonts.
 
-**Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal) and R to restart.
+**How it plays:** the app opens on a home screen showing your next level; press Play. Levels unlock in order.
+
+**Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal), R to restart, and Enter on the home screen to play.
+
+**For testers:** Settings → Reset progress starts a fresh run from level 1.
 
 ## Tests
 ```sh

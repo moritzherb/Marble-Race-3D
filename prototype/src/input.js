@@ -18,19 +18,35 @@ export function attachInput(surface, { screenToGround, onTilt, onFirstTouch }) {
 
   const minSide = () => Math.min(window.innerWidth, window.innerHeight);
 
-  function fromDrag(dx, dy) {
-    const amount = Math.min(1, Math.hypot(dx, dy) / (CONTROLS.dragForFullTilt * minSide()));
+  let lastTarget = null;
+
+  // The drag works like a floating joystick: once your finger passes the full-tilt
+  // distance, the anchor follows it, so reversing direction responds straight away.
+  function fromDrag(x, y) {
+    const full = CONTROLS.dragForFullTilt * minSide();
+    let dx = x - drag.x;
+    let dy = y - drag.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > full) {
+      drag.x += dx * (1 - full / dist);
+      drag.y += dy * (1 - full / dist);
+      dx = x - drag.x;
+      dy = y - drag.y;
+    }
+    const amount = Math.min(1, Math.hypot(dx, dy) / full);
     if (amount < 0.04) return [0, 0];
     const [gx, gz] = screenToGround(dx, dy);
     const l = Math.hypot(gx, gz) || 1;
     let t = [(gx / l) * amount, (gz / l) * amount];
-    if (CONTROLS.directionAssist) t = assistDirection(t);
+    if (CONTROLS.directionAssist) t = assistDirection(t, lastTarget);
+    lastTarget = t;
     return t;
   }
 
   surface.addEventListener('pointerdown', (e) => {
     if (drag) return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    lastTarget = null;
     surface.setPointerCapture?.(e.pointerId);
     onFirstTouch?.();
     onTilt([0, 0], true);
@@ -38,7 +54,7 @@ export function attachInput(surface, { screenToGround, onTilt, onFirstTouch }) {
   });
   surface.addEventListener('pointermove', (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    onTilt(fromDrag(e.clientX - drag.x, e.clientY - drag.y), true);
+    onTilt(fromDrag(e.clientX, e.clientY), true);
   });
   const end = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
