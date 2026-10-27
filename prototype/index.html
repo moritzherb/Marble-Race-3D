@@ -268,15 +268,18 @@
   .play {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 12px;
-    padding: 18px 38px 18px 32px;
+    /* 5px more at the bottom balances the pressed-edge shadow, so content centres on the visible face */
+    padding: 16px 36px 21px;
+    line-height: 1;
     border-radius: 999px;
     background: var(--maple);
     color: var(--ink);
     font: 700 26px/1 var(--font-display);
     box-shadow: inset 0 -5px 0 var(--maple-edge), 0 10px 26px rgba(0, 0, 0, 0.22);
   }
-  .play svg { width: 26px; height: 26px; color: var(--go); }
+  .play svg { width: 20px; height: 24px; color: var(--go); flex: none; }
   .play:active { transform: translateY(2px); box-shadow: inset 0 -2px 0 var(--maple-edge), 0 6px 16px rgba(0, 0, 0, 0.2); }
   .home-foot { display: flex; justify-content: center; gap: 12px; }
   @media (prefers-reduced-motion: reduce) {
@@ -325,7 +328,7 @@
       <p class="level"><span id="homeNum">1</span> · <span id="homeName">First Tilt</span></p>
     </div>
     <button class="play" id="playBtn" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.87l12-7.5a1 1 0 0 0 0-1.74l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor"/></svg>
+      <svg viewBox="7 3.6 14 16.8" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.87l12-7.5a1 1 0 0 0 0-1.74l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor"/></svg>
       Play
     </button>
   </div>

@@ -23,6 +23,8 @@ const MARBLE_VIEW_R = 0.17; // drawn a little larger than the physics radius
 const MARBLE_LIFT = 0.06; // and sitting higher in the groove, so more of it shows
 const DEFAULT_YAW = (-24 * Math.PI) / 180;
 const POST_OFFSET = 0.31; // how far beside the groove a cable post stands
+const TUNNEL_RADIUS = 0.23; // arch cut through a block that sits on top of a groove
+const TUNNEL_UNDER = new Set(['straight', 'gate', 'end', 'goal', 'plate']); // grooves an arch can follow
 const POST_HEIGHT = 0.32;
 
 // Groove shading: dark where the channel meets the block top, light along the middle.
@@ -137,6 +139,70 @@ function wedgeGeometry() {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.computeVertexNormals();
+  return geo;
+}
+
+// A block with an arched tunnel through its base, running along z. Used where a block
+// sits on top of a groove, so the marble visibly rolls into a tunnel.
+function archGeometry() {
+  const w = 0.5 - BLOCK_INSET;
+  const shape = new THREE.Shape();
+  shape.moveTo(-w, 0);
+  shape.lineTo(-TUNNEL_RADIUS, 0);
+  shape.absarc(0, 0, TUNNEL_RADIUS, Math.PI, 0, true);
+  shape.lineTo(w, 0);
+  shape.lineTo(w, TOP);
+  shape.lineTo(-w, TOP);
+  shape.lineTo(-w, 0);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 2 * w, bevelEnabled: false, curveSegments: 20 });
+  geo.translate(0, 0, -w);
+  return geo;
+}
+
+// The dark inside of that tunnel.
+function tunnelLiningGeometry() {
+  const w = 0.5 - BLOCK_INSET;
+  const r = TUNNEL_RADIUS - 0.004;
+  const pos = [];
+  const index = [];
+  const steps = 20;
+  for (let i = 0; i <= steps; i++) {
+    const a = (Math.PI * i) / steps;
+    pos.push(Math.cos(a) * r, Math.sin(a) * r, -w, Math.cos(a) * r, Math.sin(a) * r, w);
+  }
+  for (let i = 0; i < steps; i++) {
+    const a = i * 2;
+    index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// The darkness of a tunnel: a shade over the groove inside, plus a dim veil just inside
+// each mouth. From the steep camera you only see a sliver of the inside, so the veil is
+// what makes the opening read as a hole; a marble rolling in disappears behind it.
+function tunnelShadeGeometry() {
+  const w = 0.5 - BLOCK_INSET;
+  const r = TUNNEL_RADIUS - 0.006;
+  const mouth = w - 0.03;
+  const pos = [-r, -0.006, -w, r, -0.006, -w, -r, -0.006, w, r, -0.006, w];
+  const index = [0, 2, 1, 1, 2, 3];
+  for (const z of [-mouth, mouth]) {
+    const centre = pos.length / 3;
+    pos.push(0, -0.006, z);
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+      const a = (Math.PI * i) / steps;
+      pos.push(Math.cos(a) * r, Math.max(-0.006, Math.sin(a) * r), z);
+      if (i > 0) index.push(centre, centre + i, centre + i + 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(index);
   return geo;
 }
 
@@ -321,12 +387,17 @@ export function createView(canvas) {
   const cubeGeo = new THREE.BoxGeometry(1 - 2 * BLOCK_INSET, TOP, 1 - 2 * BLOCK_INSET);
   cubeGeo.translate(0, TOP / 2, 0);
   const wedgeGeo = wedgeGeometry();
+  const archGeo = archGeometry();
+  const liningGeo = tunnelLiningGeometry();
+  const liningMat = new THREE.MeshStandardMaterial({ color: 0x4a321d, roughness: 0.95, side: THREE.DoubleSide });
+  const shadeGeo = tunnelShadeGeometry();
+  const shadeMat = new THREE.MeshBasicMaterial({ color: 0x24170c, transparent: true, opacity: 0.82, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   const marbleGeo = new THREE.SphereGeometry(MARBLE_VIEW_R, 32, 18);
   const postGeo = new THREE.CylinderGeometry(0.026, 0.036, POST_HEIGHT, 10);
   postGeo.translate(0, POST_HEIGHT / 2, 0);
   const knobGeo = new THREE.SphereGeometry(0.05, 14, 10);
   const beadGeo = new THREE.SphereGeometry(0.03, 10, 8);
-  const shared = new Set([cubeGeo, wedgeGeo, marbleGeo, postGeo, knobGeo, beadGeo]);
+  const shared = new Set([cubeGeo, wedgeGeo, archGeo, liningGeo, shadeGeo, marbleGeo, postGeo, knobGeo, beadGeo]);
 
   let pivot = null; // tilts around the machine's centre
   let content = null; // machine coordinates live here
@@ -344,13 +415,36 @@ export function createView(canvas) {
     pivot = null;
   }
 
+  // Which way a groove under this block runs, if the block should have a tunnel through it.
+  function tunnelAxis(track, owner, piece) {
+    if (piece.type === 'ramp') return null;
+    const [x, y, z] = piece.anchor;
+    const below = track.pieces[owner.get(`${x},${y - 1},${z}`)];
+    if (!below || below === piece || !TUNNEL_UNDER.has(below.type)) return null;
+    const { tangent } = sampleEdge(track.edges[below.edges[0]], 0.25);
+    return Math.abs(tangent[2]) > Math.abs(tangent[0]) ? 'ns' : 'ew';
+  }
+
   // Wood blocks: one instanced mesh per shape and wood tint keeps draw calls low.
-  function addBlocks(track) {
+  // Blocks over a groove get an arched tunnel instead.
+  function addBlocks(track, owner) {
     const groups = new Map();
     let n = 0;
     for (const piece of track.pieces) {
       const wedge = piece.type === 'ramp';
       const mat = (piece.anchor[0] * 7 + piece.anchor[1] * 3 + piece.anchor[2] * 5 + n++) % woodMats.length;
+      const axis = tunnelAxis(track, owner, piece);
+      if (axis) {
+        for (const [geo, material] of [[archGeo, woodMats[mat]], [liningGeo, liningMat], [shadeGeo, shadeMat]]) {
+          const mesh = new THREE.Mesh(geo, material);
+          mesh.position.set(piece.anchor[0] + 0.5, piece.anchor[1], piece.anchor[2] + 0.5);
+          mesh.rotation.y = axis === 'ns' ? 0 : Math.PI / 2;
+          mesh.castShadow = geo !== shadeGeo;
+          mesh.receiveShadow = geo !== shadeGeo;
+          content.add(mesh);
+        }
+        continue;
+      }
       const key = `${wedge ? 'w' : 'c'}${mat}`;
       if (!groups.has(key)) groups.set(key, { geo: wedge ? wedgeGeo : cubeGeo, mat: woodMats[mat], list: [] });
       const m = new THREE.Matrix4().makeRotationY((-piece.r * Math.PI) / 2);
@@ -396,7 +490,9 @@ export function createView(canvas) {
     scene.add(pivot);
     floor.position.y = min[1] - 2.2;
 
-    addBlocks(track);
+    const owner = new Map();
+    for (const piece of track.pieces) for (const c of pieceCells(piece.type, piece.anchor, piece.r)) owner.set(c.join(','), piece.index);
+    addBlocks(track, owner);
     const grooves = new THREE.Mesh(grooveGeometry(track), grooveMat);
     grooves.receiveShadow = true;
     content.add(grooves);
@@ -488,8 +584,6 @@ export function createView(canvas) {
 
     // Cells with a different block directly on top are tunnels: only there is a marble
     // hidden from every angle, so only there does its outline show through the wood.
-    const owner = new Map();
-    for (const piece of track.pieces) for (const c of pieceCells(piece.type, piece.anchor, piece.r)) owner.set(c.join(','), piece.index);
     const inTunnel = (pos) => {
       const x = Math.floor(pos[0]);
       const y = Math.floor(pos[1]);
