@@ -1,0 +1,11 @@
+{
+  "name": "marble-machine-rush",
+  "private": true,
+  "type": "module",
+  "description": "Greybox prototype of a tilt-the-machine marble puzzle with rail physics.",
+  "scripts": {
+    "test": "node --test prototype/test/*.test.js",
+    "serve": "python3 -m http.server 8000 --directory prototype",
+    "build:artifact": "node tools/build-artifact.mjs"
+  }
+}

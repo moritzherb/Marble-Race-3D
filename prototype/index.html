@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Marble Machine Rush</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  /* Layout: full-screen 3D stage; HUD pinned to the top and bottom edges; cards float over a teal scrim. */
+  :root {
+    --table: #39aeb1;       /* the teal studio backdrop from the reference photo */
+    --table-deep: #1f7c80;
+    --maple: #f4e7cf;       /* pale wood for HUD tokens and cards */
+    --maple-edge: #d8bc90;
+    --ink: #3b2915;
+    --ink-soft: #725a3f;
+    --go: #1f7c80;
+    --alarm: #d8432b;
+    --gold: #e0a92e;
+    --scrim: rgba(18, 74, 77, 0.55);
+    --font-display: 'Fredoka', 'Trebuchet MS', 'Segoe UI', sans-serif;
+    --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--table);
+    color: var(--ink);
+    font: 15px/1.4 var(--font-body);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #stage {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    background: radial-gradient(ellipse at 50% 42%, #44b9bc 0%, var(--table) 55%, #2f9fa3 100%);
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    cursor: pointer;
+  }
+  button:focus-visible, input:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+  .token {
+    background: var(--maple);
+    border-radius: 12px;
+    box-shadow: inset 0 -3px 0 var(--maple-edge), 0 2px 6px rgba(0, 0, 0, 0.12);
+    padding: 8px 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .token:active { transform: translateY(1px); box-shadow: inset 0 -1px 0 var(--maple-edge); }
+
+  .top {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .top > * { pointer-events: auto; }
+  .top .left { justify-self: start; }
+  .top .right { justify-self: end; }
+  .clock { text-align: center; color: #fff; }
+  .clock .num {
+    font: 600 44px/1 var(--font-display);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 0 var(--table-deep);
+    letter-spacing: 0.5px;
+  }
+  .clock.low .num { color: #ffe1d6; animation: pulse 1s ease-in-out infinite; }
+  .clock .bar { width: 120px; height: 6px; margin: 6px auto 0; border-radius: 3px; background: rgba(0, 0, 0, 0.18); overflow: hidden; }
+  .clock .bar i { display: block; height: 100%; width: 100%; background: #fff; border-radius: 3px; transform-origin: left; }
+  .clock.low .bar i { background: var(--alarm); }
+  .clock .paused { font-size: 12px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.85; margin-top: 4px; }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+
+  .sub {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 82px);
+    left: 0;
+    right: 0;
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .level-label { color: #fff; font: 500 15px/1.2 var(--font-display); letter-spacing: 0.3px; text-shadow: 0 1px 0 var(--table-deep); }
+  .level-label b { opacity: 0.75; font-weight: 500; margin-right: 6px; }
+  .chips { display: flex; gap: 8px; }
+  .chip-marble {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 3px solid var(--c);
+    background: transparent;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: background 0.2s;
+  }
+  .chip-marble.home { background: var(--c); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85); }
+  .hint {
+    max-width: 30em;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--ink);
+    padding: 8px 14px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: opacity 0.4s;
+  }
+  .hint.gone { opacity: 0; }
+
+  .bottom {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
+    pointer-events: none;
+  }
+  .bottom > * { pointer-events: auto; }
+  .round { width: 48px; height: 48px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+  .round svg { width: 24px; height: 24px; }
+  .restart { padding: 12px 22px; font: 600 17px/1 var(--font-display); }
+
+  .banner {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--maple);
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: var(--scrim);
+    display: grid;
+    grid-template-columns: minmax(0, 420px);
+    justify-content: center;
+    align-content: center;
+    padding-block: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow-y: auto;
+  }
+  .card {
+    min-width: 0;
+    background: var(--maple);
+    border-radius: 18px;
+    box-shadow: inset 0 -5px 0 var(--maple-edge), 0 10px 30px rgba(0, 0, 0, 0.25);
+    padding: 20px 20px 24px;
+    display: grid;
+    gap: 14px;
+    max-height: 100%;
+    overflow-y: auto;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .card h2 { margin: 0; font: 600 26px/1.15 var(--font-display); text-wrap: balance; }
+  .card h3 { margin: 6px 0 0; font: 600 13px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: 1px; color: var(--ink-soft); }
+  .card p { margin: 0; color: var(--ink-soft); }
+  .card .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .card .row > button { flex: 1 1 auto; }
+  .btn { padding: 12px 16px; border-radius: 12px; font: 600 16px/1 var(--font-display); background: #fff; box-shadow: inset 0 -3px 0 var(--maple-edge); }
+  .btn.primary { background: var(--go); color: #fff; box-shadow: inset 0 -3px 0 #135a5d; }
+  .btn.small { padding: 8px 12px; font-size: 14px; }
+  .stars { display: flex; gap: 6px; justify-content: center; }
+  .stars svg { width: 44px; height: 44px; }
+  .result-time { text-align: center; font: 600 34px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .targets { text-align: center; font-size: 14px; color: var(--ink-soft); }
+  .grid-levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .grid-levels button {
+    text-align: left;
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: inset 0 -3px 0 var(--maple-edge);
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+  .grid-levels button.current { outline: 3px solid var(--go); }
+  .grid-levels .n { font: 600 22px/1 var(--font-display); }
+  .grid-levels .name { font-size: 13px; line-height: 1.2; }
+  .grid-levels .got { font-size: 13px; color: var(--gold); letter-spacing: 1px; }
+  .setting { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; }
+  .setting label { flex: 1 1 150px; }
+  .setting label { font-weight: 700; }
+  .setting small { display: block; font-weight: 400; color: var(--ink-soft); }
+  .seg { display: inline-flex; background: #fff; border-radius: 10px; padding: 3px; box-shadow: inset 0 -2px 0 var(--maple-edge); }
+  .seg button { padding: 7px 10px; border-radius: 8px; background: transparent; font-size: 13px; font-weight: 700; }
+  .seg button[aria-pressed='true'] { background: var(--go); color: #fff; }
+  .slider { display: grid; gap: 4px; }
+  .slider .lab { display: flex; justify-content: space-between; font-size: 14px; }
+  .slider .lab span:last-child { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+  .slider input { width: 100%; accent-color: var(--go); }
+  .note { font-size: 13px; }
+  .note.ok { color: var(--go); }
+  .note.bad { color: var(--alarm); }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--maple-edge); white-space: nowrap; }
+  th { color: var(--ink-soft); font-weight: 700; }
+  ul.howto { margin: 0; padding-left: 18px; color: var(--ink-soft); display: grid; gap: 4px; }
+  @media (prefers-reduced-motion: reduce) {
+    .clock.low .num { animation: none; }
+    .hint { transition: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="The wooden marble machine. Drag to tilt it."></canvas>
+
+<header class="top">
+  <button class="token left" id="levelsBtn" type="button">Levels</button>
+  <div class="clock" id="clock" aria-live="off">
+    <div class="num" id="time">20</div>
+    <div class="bar"><i id="timeBar"></i></div>
+    <div class="paused" id="timerNote" hidden>Starts on first tilt</div>
+  </div>
+  <button class="token right" id="settingsBtn" type="button">Settings</button>
+</header>
+
+<div class="sub">
+  <div class="level-label"><b id="levelNum">1</b><span id="levelName">First Tilt</span></div>
+  <div class="chips" id="chips" aria-label="Marbles delivered"></div>
+  <div class="hint" id="hint"></div>
+</div>
+
+<footer class="bottom">
+  <button class="token round" id="orbitLeft" type="button" aria-label="Turn the view left">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg>
+  </button>
+  <button class="token restart" id="restartBtn" type="button">Restart</button>
+  <button class="token round" id="orbitRight" type="button" aria-label="Turn the view right">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v5h-5"/></svg>
+  </button>
+</footer>
+
+<div class="banner" id="banner" hidden></div>
+<div class="scrim" id="scrim" hidden><section class="card" id="card" role="dialog" aria-modal="true"></section></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

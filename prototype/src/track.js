@@ -1,0 +1,190 @@
+// Turns a level description into a track network the marbles can ride on.
+//
+// Every rail of every piece becomes an "edge" (a polyline). Rail ends that touch
+// become shared "nodes". A node with one edge is a dead end, two edges is a plain
+// connection, three or more is a junction.
+
+import { PIECES, toMachine, pieceCells, supportCells } from './pieces.js';
+
+const key3 = (p) => p.map((v) => Math.round(v * 1000)).join(',');
+const cellKey = (c) => c.join(',');
+
+export function sub(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+export function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+export function len(a) {
+  return Math.sqrt(dot(a, a));
+}
+export function scale(a, k) {
+  return [a[0] * k, a[1] * k, a[2] * k];
+}
+export function norm(a) {
+  const l = len(a) || 1;
+  return scale(a, 1 / l);
+}
+
+function makeEdge(id, pts, pieceIndex) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + len(sub(pts[i], pts[i - 1])));
+  return { id, pts, cum, L: cum[cum.length - 1], piece: pieceIndex, n0: -1, n1: -1 };
+}
+
+// Position and unit tangent (pointing from pts[0] towards the last point) at distance s.
+export function sampleEdge(edge, s) {
+  const { pts, cum, L } = edge;
+  const t = Math.min(Math.max(s, 0), L);
+  let i = 1;
+  while (i < cum.length - 1 && cum[i] < t) i++;
+  const a = pts[i - 1];
+  const b = pts[i];
+  const segLen = cum[i] - cum[i - 1] || 1;
+  const f = (t - cum[i - 1]) / segLen;
+  const pos = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  return { pos, tangent: norm(sub(b, a)) };
+}
+
+// Unit tangent of an edge at one of its ends, pointing away from that end's node.
+export function tangentAwayFrom(edge, end) {
+  if (end === 0) return sampleEdge(edge, 0).tangent;
+  return scale(sampleEdge(edge, edge.L).tangent, -1);
+}
+
+export function buildTrack(level) {
+  const errors = [];
+  const occupied = new Map();
+  const placed = [];
+
+  const claim = (cell, owner) => {
+    const k = cellKey(cell);
+    if (occupied.has(k)) errors.push(`Cell ${k} is used twice (${occupied.get(k).label} and ${owner.label})`);
+    else occupied.set(k, owner);
+  };
+
+  for (const [type, x, y, z, r = 0, opts = {}] of level.pieces) {
+    const def = PIECES[type];
+    if (!def) {
+      errors.push(`Unknown piece type "${type}"`);
+      continue;
+    }
+    const piece = { index: placed.length, type, anchor: [x, y, z], r, opts, label: `${type}@${x},${y},${z}` };
+    placed.push(piece);
+    for (const c of pieceCells(type, piece.anchor, r)) claim(c, piece);
+  }
+
+  // Plain blocks: listed ones plus rectangles filled on the ground tier.
+  const addBlock = (cell) => {
+    if (occupied.has(cellKey(cell))) return;
+    const piece = { index: placed.length, type: 'block', anchor: cell, r: 0, opts: {}, label: `block@${cell}` };
+    placed.push(piece);
+    claim(cell, piece);
+  };
+  for (const cell of level.blocks || []) addBlock(cell);
+  for (const [x0, z0, x1, z1, y = 0] of level.fill || []) {
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) addBlock([x, y, z]);
+  }
+
+  // Every raised piece rests on a column of support blocks down to the ground or the next block.
+  for (const piece of [...placed]) {
+    for (const [x, y, z] of supportCells(piece.type, piece.anchor, piece.r)) {
+      for (let below = y - 1; below >= 0; below--) {
+        if (occupied.has(cellKey([x, below, z]))) break;
+        addBlock([x, below, z]);
+      }
+    }
+  }
+
+  // Rails -> edges and nodes.
+  const edges = [];
+  const nodes = [];
+  const nodeByKey = new Map();
+  const nodeAt = (p) => {
+    const k = key3(p);
+    if (!nodeByKey.has(k)) {
+      const node = { id: nodes.length, pos: p, links: [] };
+      nodes.push(node);
+      nodeByKey.set(k, node);
+    }
+    return nodeByKey.get(k);
+  };
+
+  for (const piece of placed) {
+    piece.edges = [];
+    for (const rail of PIECES[piece.type].rails) {
+      const pts = rail.map((p) => toMachine(p, piece.anchor, piece.r));
+      const edge = makeEdge(edges.length, pts, piece.index);
+      const a = nodeAt(pts[0]);
+      const b = nodeAt(pts[pts.length - 1]);
+      edge.n0 = a.id;
+      edge.n1 = b.id;
+      a.links.push({ edge: edge.id, end: 0 });
+      b.links.push({ edge: edge.id, end: 1 });
+      edges.push(edge);
+      piece.edges.push(edge.id);
+    }
+  }
+
+  // A rail end lying on a cell face with nothing attached is an open groove: a level bug.
+  const onFace = (v) => Math.abs(v - Math.round(v)) < 1e-6;
+  for (const node of nodes) {
+    if (node.links.length === 1 && (onFace(node.pos[0]) || onFace(node.pos[2]))) {
+      errors.push(`Open groove end at ${node.pos.map((v) => v.toFixed(2)).join(', ')}`);
+    }
+  }
+
+  // Mechanisms.
+  const goals = [];
+  const plates = [];
+  const gates = [];
+  for (const piece of placed) {
+    const feature = PIECES[piece.type].feature;
+    if (!feature) continue;
+    const edge = edges[piece.edges[0]];
+    const link = piece.opts.link || null;
+    if (feature.type === 'goal') {
+      if (!piece.opts.color) errors.push(`Goal ${piece.label} has no colour`);
+      goals.push({ edge: edge.id, color: piece.opts.color, link, filled: false, piece: piece.index });
+    } else if (feature.type === 'plate') {
+      plates.push({ edge: edge.id, from: edge.L - 0.3, link, pressed: false, piece: piece.index });
+    } else if (feature.type === 'gate') {
+      gates.push({ edge: edge.id, s: edge.L / 2, link, open: false, piece: piece.index });
+    }
+  }
+  for (const gate of gates) {
+    const opener = plates.some((p) => p.link === gate.link) || goals.some((g) => g.link === gate.link);
+    if (!gate.link || !opener) errors.push(`Gate ${placed[gate.piece].label} has no plate or goal linked to it`);
+  }
+
+  // Marble start positions.
+  const starts = (level.marbles || []).map((m) => {
+    const owner = occupied.get(cellKey(m.at));
+    if (!owner || !owner.edges || owner.edges.length === 0) {
+      errors.push(`Marble ${m.color} starts at ${m.at} where there is no groove`);
+      return null;
+    }
+    const edge = edges[owner.edges[0]];
+    const deadEnd = ['end', 'goal', 'plate'].includes(owner.type);
+    const s = typeof m.s === 'number' ? m.s * edge.L : deadEnd ? edge.L : edge.L / 2;
+    return { color: m.color, edge: edge.id, s };
+  });
+
+  const colours = new Set((level.marbles || []).map((m) => m.color));
+  for (const c of colours) {
+    if (!goals.some((g) => g.color === c)) errors.push(`No goal for the ${c} marble`);
+  }
+
+  // Bounds of all wood, for the camera.
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const k of occupied.keys()) {
+    const c = k.split(',').map(Number);
+    for (let i = 0; i < 3; i++) {
+      min[i] = Math.min(min[i], c[i]);
+      max[i] = Math.max(max[i], c[i] + 1);
+    }
+  }
+
+  return { pieces: placed, edges, nodes, goals, plates, gates, starts, bounds: { min, max }, errors };
+}
