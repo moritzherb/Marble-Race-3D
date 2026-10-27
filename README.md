@@ -43,7 +43,8 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 ## Adding a level
 1. Add an entry to `LEVELS` in `prototype/src/levels.js`. The comment at the top of that file explains piece rotations.
 2. Write its `solution` as a list of `[direction, seconds]` steps, and any `traps` that should fail.
-3. Run `npm test`. It reports open groove ends, overlapping blocks, missing goals, and whether the solution works.
+3. Use only the blocks the track needs; add a plain block (`blocks: [[x, y, z]]`) only where parts would otherwise float apart.
+4. Run `npm test`. It reports open groove ends, overlapping blocks, a machine in separate parts, missing goals, and whether the solution works.
 
 ## Docs
 - [docs/design.md](docs/design.md): decisions from the concept review (signature mechanic, rules, controls, visual direction)

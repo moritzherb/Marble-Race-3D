@@ -6,7 +6,8 @@
 //   Curves join west+north at 0 (1 = north+east, 2 = east+south, 3 = south+west).
 //   T-junctions open west+east+north at 0 (1 = north+south+east, 2 = east+west+south, 3 = south+north+west).
 //   Ramps start high on the west and end low two cells east at 0; rotation 1 runs north to south.
-// fill: rectangles [x0, z0, x1, z1] filled with plain blocks on the ground tier.
+// blocks: extra plain blocks [x, y, z], only where needed to hold the machine together.
+//   Raised pieces get their support columns automatically.
 // solution: the reference run used by the tests and to set the timers.
 // traps: wrong move sequences the level is designed to punish; the tests check they fail.
 
@@ -25,7 +26,6 @@ export const LEVELS = [
       ['straight', 4, 0, 2, 1],
       ['goal', 4, 0, 1, 3, { color: 'blue' }],
     ],
-    fill: [[0, 1, 4, 4]],
     timeFactor: 4,
     solution: [['E', 1.6], ['N', 1.4]],
   },
@@ -48,7 +48,6 @@ export const LEVELS = [
       ['straight', 1, 0, 2, 1],
       ['goal', 1, 0, 3, 1, { color: 'orange' }],
     ],
-    fill: [[0, 0, 4, 4]],
     timeFactor: 3.5,
     solution: [['SE', 3.2]],
   },
@@ -71,7 +70,6 @@ export const LEVELS = [
       ['straight', 2, 0, 3, 1],
       ['end', 2, 0, 4, 1],
     ],
-    fill: [[0, 1, 4, 4]],
     timeFactor: 3,
     solution: [['NW', 2.0], ['NE', 2.4]],
   },
@@ -120,7 +118,6 @@ export const LEVELS = [
       ['straight', 4, 0, 3, 1],
       ['goal', 4, 0, 4, 1, { color: 'orange' }],
     ],
-    fill: [[0, 0, 4, 4]],
     timeFactor: 3,
     solution: [['E', 1.0], ['S', 1.8], ['W', 1.8]],
     traps: [[['S', 3], ['E', 2], ['W', 3]]],
@@ -143,7 +140,6 @@ export const LEVELS = [
       ['straight', 3, 0, 1, 1],
       ['plate', 3, 0, 0, 3, { link: 'A' }],
     ],
-    fill: [[0, 0, 5, 3]],
     timeFactor: 3,
     solution: [['NE', 1.6], ['W', 2.6], ['SE', 2.2]],
     traps: [[['W', 3], ['NE', 3], ['SE', 3]]],
@@ -172,7 +168,6 @@ export const LEVELS = [
       ['goal', 5, 0, 4, 0, { color: 'green' }],
       ['end', 4, 0, 5, 1],
     ],
-    fill: [[0, 0, 5, 3], [0, 5, 3, 5], [5, 5, 5, 5]],
     timeFactor: 2.5,
     solution: [['E', 4.0], ['NW', 3.5]],
     traps: [[['NW', 3], ['E', 4]]],
@@ -204,7 +199,6 @@ export const LEVELS = [
       ['straight', 3, 0, 4],
       ['end', 4, 0, 4, 0],
     ],
-    fill: [[0, 0, 4, 5]],
     timeFactor: 2.5,
     solution: [['E', 1.2], ['S', 3.0], ['W', 3.2]],
     traps: [[['W', 4], ['E', 2], ['S', 4]]],
@@ -234,7 +228,7 @@ export const LEVELS = [
       ['straight', 2, 0, 5],
       ['end', 3, 0, 5, 0],
     ],
-    fill: [[0, 0, 5, 5]],
+    blocks: [[4, 0, 5]], // joins green's row to the rest of the machine
     timeFactor: 2.5,
     solution: [['SW', 4.0], ['E', 2.8]],
     traps: [[['E', 3], ['SW', 5], ['E', 3]]],
@@ -266,7 +260,6 @@ export const LEVELS = [
       ['straight', 3, 0, 5],
       ['goal', 4, 0, 5, 0, { color: 'orange' }],
     ],
-    fill: [[0, 0, 4, 2], [0, 3, 0, 3], [0, 4, 4, 4], [0, 6, 4, 7]],
     timeFactor: 2.2,
     solution: [['SE', 3.4], ['W', 3.2]],
     traps: [[['W', 4], ['SE', 5], ['W', 4]]],

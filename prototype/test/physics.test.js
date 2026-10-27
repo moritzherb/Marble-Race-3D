@@ -118,6 +118,7 @@ const gated = {
     ['end', 2, 0, 2, 2],
     ['goal', 3, 0, 2, 0, { color: 'red' }],
   ],
+  blocks: [[1, 0, 2]],
 };
 
 test('a closed gate blocks the groove', () => {
@@ -164,4 +165,12 @@ test('raised pieces get support blocks underneath', () => {
   });
   const supports = track.pieces.filter((p) => p.type === 'block');
   assert.equal(supports.length, 4);
+});
+
+test('a machine in separate parts is reported as a level error', () => {
+  const track = buildTrack({
+    marbles: [],
+    pieces: [['end', 0, 0, 0, 2], ['end', 1, 0, 0, 0], ['end', 4, 0, 0, 2], ['end', 5, 0, 0, 0]],
+  });
+  assert.ok(track.errors.some((e) => e.includes('2 separate parts')));
 });

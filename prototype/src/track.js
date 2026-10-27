@@ -52,6 +52,29 @@ export function tangentAwayFrom(edge, end) {
   return scale(sampleEdge(edge, edge.L).tangent, -1);
 }
 
+// Number of separate wooden structures: blocks touching face to face count as one.
+function countParts(occupied) {
+  const seen = new Set();
+  let parts = 0;
+  for (const start of occupied.keys()) {
+    if (seen.has(start)) continue;
+    parts++;
+    seen.add(start);
+    const queue = [start];
+    while (queue.length) {
+      const [x, y, z] = queue.pop().split(',').map(Number);
+      for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+        const k = cellKey([x + dx, y + dy, z + dz]);
+        if (occupied.has(k) && !seen.has(k)) {
+          seen.add(k);
+          queue.push(k);
+        }
+      }
+    }
+  }
+  return parts;
+}
+
 export function buildTrack(level) {
   const errors = [];
   const occupied = new Map();
@@ -95,6 +118,10 @@ export function buildTrack(level) {
       }
     }
   }
+
+  // The machine tilts as one object, so every block must touch the rest.
+  const parts = countParts(occupied);
+  if (parts > 1) errors.push(`The machine is in ${parts} separate parts; add blocks to join them`);
 
   // Rails -> edges and nodes.
   const edges = [];

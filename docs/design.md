@@ -47,6 +47,7 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
   - **Grooved blocks:** solid block, straight groove, curve, T-junction, crossing, dead end.
   - **Mechanism blocks:** goal, plate, gate.
   - **Two-cell ramp.**
+- A machine is only its track blocks and the supports under raised parts, with no filler slabs. Every block must touch the rest so the machine tilts as one piece; the level tests check this.
 - Raised blocks get support columns automatically.
 - **Wood:** light, procedural grain, five tint variants. Small gaps between blocks show the seams that make it read as a real toy.
 - **Grooves:** darker, shaded strips along the rails, so they read as carved channels.
