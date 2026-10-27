@@ -43,6 +43,13 @@ export function attachInput(surface, { screenToGround, onTilt, onFirstTouch }) {
     return t;
   }
 
+  // On iPhone a long press starts text selection (the magnifier bubble) or a callout
+  // menu unless the touch itself is cancelled. Pointer events still arrive.
+  for (const type of ['touchstart', 'touchmove', 'touchend']) {
+    surface.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  }
+  surface.addEventListener('contextmenu', (e) => e.preventDefault());
+
   surface.addEventListener('pointerdown', (e) => {
     if (drag) return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY };

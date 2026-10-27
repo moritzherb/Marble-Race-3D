@@ -392,9 +392,9 @@ export function createView(canvas) {
   const archGeo = archGeometry(TOP);
   const archUnderCarvedGeo = archGeometry(archUnder);
   const liningGeo = tunnelLiningGeometry();
-  const liningMat = new THREE.MeshStandardMaterial({ color: 0x4a321d, roughness: 0.95, side: THREE.DoubleSide });
+  const liningMat = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.95, side: THREE.DoubleSide });
   const shadeGeo = tunnelShadeGeometry();
-  const shadeMat = new THREE.MeshBasicMaterial({ color: 0x24170c, transparent: true, opacity: 0.82, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const shadeMat = new THREE.MeshBasicMaterial({ color: 0x4a3220, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   const marbleGeo = new THREE.SphereGeometry(MARBLE_VIEW_R, 32, 18);
   const postGeo = new THREE.CylinderGeometry(0.026, 0.036, POST_HEIGHT, 10);
   postGeo.translate(0, POST_HEIGHT / 2, 0);
