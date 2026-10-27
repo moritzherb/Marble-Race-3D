@@ -569,4 +569,4 @@ if (hot?.ready) hot.ready(start);
 else start(hot?.data ?? {});
 
 // For automated checks and debugging in the browser console.
-window.__mmr = { game, play, showHome, restart, LEVELS };
+window.__mmr = { game, play, showHome, restart, LEVELS, view };

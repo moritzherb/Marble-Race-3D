@@ -2,7 +2,7 @@
 // physics uses, so what you see is exactly what the marbles ride on.
 
 import * as THREE from './three.js';
-import { GROOVE_DEPTH_OFFSET } from './pieces.js';
+import { GROOVE_DEPTH_OFFSET, pieceCells } from './pieces.js';
 import { sampleEdge, tangentAwayFrom } from './track.js';
 import { machineRotation } from './tilt.js';
 
@@ -332,7 +332,7 @@ export function createView(canvas) {
   let content = null; // machine coordinates live here
   let current = null; // per-level objects
   let clock = 0;
-  const view = { yaw: DEFAULT_YAW, targetYaw: DEFAULT_YAW, pitch: (50 * Math.PI) / 180, distance: 12, center: new THREE.Vector3(), spin: false };
+  const view = { yaw: DEFAULT_YAW, targetYaw: DEFAULT_YAW, pitch: (50 * Math.PI) / 180, distance: 12, targetDistance: 12, center: new THREE.Vector3(), spin: false };
 
   function clearLevel() {
     if (!pivot) return;
@@ -486,7 +486,20 @@ export function createView(canvas) {
       }
     });
 
-    // Marbles, each with an outline twin that only draws when the marble is hidden.
+    // Cells with a different block directly on top are tunnels: only there is a marble
+    // hidden from every angle, so only there does its outline show through the wood.
+    const owner = new Map();
+    for (const piece of track.pieces) for (const c of pieceCells(piece.type, piece.anchor, piece.r)) owner.set(c.join(','), piece.index);
+    const inTunnel = (pos) => {
+      const x = Math.floor(pos[0]);
+      const y = Math.floor(pos[1]);
+      const z = Math.floor(pos[2]);
+      const here = owner.get(`${x},${y},${z}`);
+      const above = owner.get(`${x},${y + 1},${z}`);
+      return here !== undefined && above !== undefined && above !== here;
+    };
+
+    // Marbles, each with an outline twin that only draws when the marble is in a tunnel.
     const marbles = track.starts.map((st) => {
       const hex = MARBLE_COLORS[st.color] ?? 0xffffff;
       const mesh = new THREE.Mesh(
@@ -515,8 +528,9 @@ export function createView(canvas) {
     cam.far = size * 4;
     cam.updateProjectionMatrix();
 
-    current = { track, goals, plates, gates, cables, marbles };
+    current = { track, goals, plates, gates, cables, marbles, inTunnel };
     fitCamera();
+    view.distance = view.targetDistance;
   }
 
   function cameraBasis(yaw) {
@@ -526,11 +540,19 @@ export function createView(canvas) {
     return { fwd, right, up };
   }
 
-  // Pick a camera distance so the whole machine fits, with room for the HUD.
+  // Pick a camera distance so the whole machine fits, with room for the HUD. While the
+  // camera circles (home screen) it uses the distance that fits from every side, so the
+  // zoom stays still instead of pumping in and out.
   function fitCamera() {
     if (!current) return;
+    let d = distanceFor(view.targetYaw);
+    if (view.spin) for (let k = 0; k < 24; k++) d = Math.max(d, distanceFor(view.yaw + (k * Math.PI) / 12));
+    view.targetDistance = d;
+  }
+
+  function distanceFor(yaw) {
     const { min, max } = current.track.bounds;
-    const { fwd, right, up } = cameraBasis(view.targetYaw);
+    const { fwd, right, up } = cameraBasis(yaw);
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2) * 0.8);
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect * 0.96;
     let d = 4;
@@ -545,7 +567,7 @@ export function createView(canvas) {
         }
       }
     }
-    view.distance = d;
+    return d;
   }
 
   function placeCamera() {
@@ -580,7 +602,7 @@ export function createView(canvas) {
         }
       }
       vis.ghost.position.copy(vis.mesh.position);
-      vis.ghost.visible = !m.delivered;
+      vis.ghost.visible = !m.delivered && current.inTunnel(m.pos);
     });
 
     const ease = (rate) => Math.min(1, dt * rate);
@@ -627,16 +649,18 @@ export function createView(canvas) {
   }
 
   function frame(dt) {
+    // Any resolution change happens before drawing: resizing clears the canvas, and doing
+    // it after a render would show one empty frame.
+    adaptResolution(dt);
     if (view.spin) {
       view.targetYaw += dt * 0.22;
       view.yaw = view.targetYaw;
-      fitCamera();
     } else {
       view.yaw += (view.targetYaw - view.yaw) * Math.min(1, dt * 9);
     }
+    view.distance += (view.targetDistance - view.distance) * Math.min(1, dt * 5);
     placeCamera();
     renderer.render(scene, camera);
-    adaptResolution(dt);
   }
 
   function resize() {
@@ -672,5 +696,12 @@ export function createView(canvas) {
     return [dx * r.x - dy * f.x, dx * r.y - dy * f.y];
   }
 
-  return { build, sync, frame, resize, orbit, setSpin, screenToGround, renderer };
+  // Camera state and which marble outlines are showing, for automated checks.
+  const debug = () => ({
+    yaw: view.yaw,
+    distance: view.distance,
+    outlines: current ? current.marbles.map((m) => m.ghost.visible) : [],
+  });
+
+  return { build, sync, frame, resize, orbit, setSpin, screenToGround, renderer, debug };
 }
