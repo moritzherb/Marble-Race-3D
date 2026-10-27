@@ -14,6 +14,8 @@ export const MARBLE_COLORS = {
   red: 0xe0453a,
 };
 const LINK_COLORS = { A: 0xc9a23a, B: 0x5d6470, C: 0xb0b8c4 };
+// Plate faces per link: light centre, rim, and the dark bullseye lines.
+const PLATE_FACES = { A: ['#f6d977', '#c9962b', '#6b4a10'], B: ['#b3bcc8', '#6b7380', '#262b33'], C: ['#f1f4f8', '#b8c0cb', '#59626e'] };
 
 const BLOCK_INSET = 0.0125; // half the gap between neighbouring blocks
 const TOP = 1 - 2 * BLOCK_INSET * 0.6; // block top, a hair under the cell top
@@ -22,7 +24,7 @@ const GROOVE_HALF_WIDTH = 0.17;
 const MARBLE_VIEW_R = 0.17; // drawn a little larger than the physics radius
 const MARBLE_LIFT = 0.06; // and sitting higher in the groove, so more of it shows
 const DEFAULT_YAW = (-24 * Math.PI) / 180;
-const POST_OFFSET = 0.31; // how far beside the groove a cable post stands
+const POST_OFFSET = 0.35; // how far beside the groove a cable post stands
 const TUNNEL_RADIUS = 0.23; // arch cut through a block that sits on top of a groove
 const TUNNEL_UNDER = new Set(['straight', 'gate', 'end', 'goal', 'plate']); // grooves an arch can follow
 const POST_HEIGHT = 0.32;
@@ -77,6 +79,37 @@ function marbleTexture(hex) {
   g.fillRect(0, 28, 128, 8);
   g.fillStyle = 'rgba(255,255,255,0.35)';
   for (let i = 0; i < 6; i++) g.fillRect(i * 22 + 4, 10, 6, 6);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// A bullseye on the plate's face, so it reads as "roll a marble here".
+function plateTexture(link) {
+  const [light, rim, dark] = PLATE_FACES[link] || PLATE_FACES.A;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 6, 64, 64, 64);
+  grad.addColorStop(0, light);
+  grad.addColorStop(1, rim);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = dark;
+  g.globalAlpha = 0.75;
+  g.lineWidth = 7;
+  g.beginPath();
+  g.arc(64, 64, 38, 0, Math.PI * 2);
+  g.stroke();
+  g.lineWidth = 3;
+  g.beginPath();
+  g.arc(64, 64, 56, 0, Math.PI * 2);
+  g.stroke();
+  g.globalAlpha = 0.85;
+  g.fillStyle = dark;
+  g.beginPath();
+  g.arc(64, 64, 13, 0, Math.PI * 2);
+  g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -403,6 +436,7 @@ export function createView(canvas) {
   let content = null; // machine coordinates live here
   let current = null; // per-level objects
   let clock = 0;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const view = { yaw: DEFAULT_YAW, targetYaw: DEFAULT_YAW, pitch: (50 * Math.PI) / 180, distance: 12, targetDistance: 12, center: new THREE.Vector3(), spin: false };
 
   function clearLevel() {
@@ -523,16 +557,25 @@ export function createView(canvas) {
       return { mat, surface: new THREE.Vector3(p[0], p[1] + GROOVE_LIFT, p[2]), tangent: sampleEdge(edge, edge.L).tangent };
     });
 
-    // Plates: a metal disc where the marble rests.
+    // Plates: a bright metal bullseye exactly where the marble comes to rest, inside a
+    // raised ring that pulses gently until a marble presses it.
     const plates = track.plates.map((plate) => {
       const edge = track.edges[plate.edge];
-      const { pos, tangent } = sampleEdge(edge, edge.L - 0.08);
-      const mat = new THREE.MeshStandardMaterial({ color: LINK_COLORS[plate.link], metalness: 0.85, roughness: 0.3, emissive: LINK_COLORS[plate.link], emissiveIntensity: 0 });
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.03, 28), mat);
-      disc.position.set(pos[0], pos[1] + GROOVE_LIFT + 0.006, pos[2]);
+      const { pos, tangent } = sampleEdge(edge, edge.L - 0.02);
+      const color = LINK_COLORS[plate.link];
+      const faceMap = plateTexture(plate.link);
+      const topMat = new THREE.MeshStandardMaterial({ map: faceMap, emissiveMap: faceMap, emissive: 0xffffff, emissiveIntensity: 0.05, metalness: 0.35, roughness: 0.4 });
+      const sideMat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.4 });
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.026, 32), [sideMat, topMat, sideMat]);
+      disc.position.set(pos[0], pos[1] + GROOVE_LIFT + 0.008, pos[2]);
       disc.receiveShadow = true;
-      content.add(disc);
-      return { mat, disc, baseY: disc.position.y, surface: new THREE.Vector3(pos[0], pos[1] + GROOVE_LIFT, pos[2]), tangent };
+      const ringMat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.35, emissive: color, emissiveIntensity: 0.2 });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.215, 0.03, 10, 40), ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(pos[0], pos[1] + GROOVE_LIFT + 0.02, pos[2]);
+      ring.castShadow = true;
+      content.add(disc, ring);
+      return { topMat, ringMat, disc, baseY: disc.position.y, surface: new THREE.Vector3(pos[0], pos[1] + GROOVE_LIFT, pos[2]), tangent };
     });
 
     // Gates: a metal slab across the groove that sinks into the wood when open.
@@ -704,10 +747,12 @@ export function createView(canvas) {
       const mat = current.goals[i].mat;
       mat.emissiveIntensity += ((g.filled ? 1.2 : 0.05) - mat.emissiveIntensity) * ease(6);
     });
+    const pulse = reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(clock * 3.2);
     sim.plates.forEach((p, i) => {
       const vis = current.plates[i];
-      vis.disc.position.y += ((p.pressed ? vis.baseY - 0.02 : vis.baseY) - vis.disc.position.y) * ease(14);
-      vis.mat.emissiveIntensity = p.pressed ? 0.35 : 0;
+      vis.disc.position.y += ((p.pressed ? vis.baseY - 0.018 : vis.baseY) - vis.disc.position.y) * ease(14);
+      vis.ringMat.emissiveIntensity = p.pressed ? 0.9 : 0.15 + 0.4 * pulse;
+      vis.topMat.emissiveIntensity = p.pressed ? 0.45 : 0.04 + 0.12 * pulse;
     });
     sim.gates.forEach((g, i) => {
       const vis = current.gates[i];
