@@ -194,5 +194,6 @@ Run `npm run cap:sync` after each change to that file.
 5. Add your phones as test devices in the AdMob console (Settings → Test devices). Then test once more with `testMode: true` on a build carrying the production app IDs.
 6. Set up Privacy & messaging (the GDPR message, the IDFA explainer, and US states if needed) and `app-ads.txt`. Fill in the store disclosures above.
 7. Only for the release build, set `"testMode": false`. Run `npm run cap:sync` and build the release. Playtest tools then show **LIVE ads**: check that before uploading.
+8. Turn off every switch in `TESTING` in `prototype/src/config.js` (for now: `unlockAllLevels`, which opens all 100 levels for playtesting).
 
 The game refuses to request live ads if `testMode` is `false` but `units` is empty for the platform. A remote config file can never switch test mode off.

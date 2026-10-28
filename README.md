@@ -12,7 +12,7 @@ This prototype exists to answer one question before more is built: **can players
   ```
   It needs an internet connection the first time, to load three.js and the fonts.
 
-**How it plays:** the app opens on a home screen with your progress and the next level turning slowly behind a Play button. Levels and Settings sit below it. Settings has Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. There are 100 levels, and they unlock in order. They get steadily harder: the last ones take 13–15 moves and link two machines together.
+**How it plays:** the app opens on a home screen with your progress and the next level turning slowly behind a Play button. Levels and Settings sit below it. Settings has Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. There are 100 levels, and they unlock in order (during playtesting all of them are open: `TESTING.unlockAllLevels` in `prototype/src/config.js`, to switch off before release). They get steadily harder: the last ones take 13–15 moves and link two machines together.
 
 **Lives, coins and power-ups:** you have 5 lives, and one comes back every 15 minutes, even with the game closed. Losing a level from 11 on costs one; levels 1–10 are free. Levels pay gold coins the first time you finish them, plus bonuses for 2 and 3 stars. Coins buy lives, a second chance when time runs out, and six power-ups from level 11: Extra Time, Speed Boost, Hint, Open All Gates, Magnetic Pull and Checkpoint. The rules and numbers are in [docs/economy.md](docs/economy.md).
 

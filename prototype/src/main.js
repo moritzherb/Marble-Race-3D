@@ -1,7 +1,7 @@
 // The game: home screen, level flow, timer, win/lose, menus and the playtest log.
 
 import { LEVELS } from './levels.js';
-import { PHYSICS, CONTROLS, SIM_DT } from './config.js';
+import { PHYSICS, CONTROLS, SIM_DT, TESTING } from './config.js';
 import { buildTrack } from './track.js';
 import { createSim, stepSim, isWon } from './sim.js';
 import { createTilt, updateTilt, gravityInMachine, directionVector } from './tilt.js';
@@ -83,9 +83,10 @@ const livesLine = ({ lives, max, nextIn }) => (nextIn === null ? `${lives}/${max
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
 
 // ---------- Progress: a level opens once the one before it is complete ----------
+// (While TESTING.unlockAllLevels is on, every level is open. Turn it off before release.)
 
 const isComplete = (progress, i) => Boolean(progress[LEVELS[i].id]);
-const isUnlocked = (progress, i) => i === 0 || isComplete(progress, i - 1);
+const isUnlocked = (progress, i) => TESTING.unlockAllLevels || i === 0 || isComplete(progress, i - 1);
 function nextLevelIndex() {
   const progress = loadProgress();
   const i = LEVELS.findIndex((_, k) => !isComplete(progress, k));

@@ -36,10 +36,13 @@ const TUNNEL_UNDER = new Set(['straight', 'gate', 'end', 'goal', 'plate']); // g
 const POST_HEIGHT = 0.32;
 
 
+// Textures are drawn at 2-4x their layout size (g.scale) so close-ups on high-density
+// phone screens stay sharp.
 function woodTexture(seed) {
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = c.height = 512;
   const g = c.getContext('2d');
+  g.scale(2, 2);
   let s = seed * 9301 + 49297;
   const rand = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
   g.fillStyle = '#e2c49a';
@@ -66,15 +69,16 @@ function woodTexture(seed) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 4;
+  tex.anisotropy = 16; // three.js clamps this to what the device supports
   return tex;
 }
 
 function marbleTexture(hex) {
   const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 64;
+  c.width = 512;
+  c.height = 256;
   const g = c.getContext('2d');
+  g.scale(4, 4);
   g.fillStyle = `#${new THREE.Color(hex).getHexString()}`;
   g.fillRect(0, 0, 128, 64);
   // A pale band around the equator so you can see the marble roll.
@@ -84,6 +88,7 @@ function marbleTexture(hex) {
   for (let i = 0; i < 6; i++) g.fillRect(i * 22 + 4, 10, 6, 6);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -91,8 +96,9 @@ function marbleTexture(hex) {
 function plateTexture(link) {
   const [light, rim, dark] = PLATE_FACES[link] || PLATE_FACES.A;
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
+  c.width = c.height = 512;
   const g = c.getContext('2d');
+  g.scale(4, 4);
   const grad = g.createRadialGradient(64, 64, 6, 64, 64, 64);
   grad.addColorStop(0, light);
   grad.addColorStop(1, rim);
@@ -115,14 +121,16 @@ function plateTexture(link) {
   g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   return tex;
 }
 
 // Red and white warning stripes for shutters, the gates that shut when their link is powered.
 function shutterTexture() {
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = c.height = 256;
   const g = c.getContext('2d');
+  g.scale(4, 4);
   g.fillStyle = '#fbf6ee';
   g.fillRect(0, 0, 64, 64);
   g.fillStyle = '#e0311f';
@@ -138,6 +146,7 @@ function shutterTexture() {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -371,7 +380,12 @@ function mergeCarved(parts) {
 }
 
 export function createView(canvas) {
-  const maxRatio = Math.min(window.devicePixelRatio || 1, 2);
+  // Draw at the screen's own pixel density (up to 3x on high-end phones). If frames get slow
+  // the resolution steps down, but never below 2x (or the screen's density, if lower):
+  // under that the machine looks soft and pixelated on a phone.
+  const deviceRatio = window.devicePixelRatio || 1;
+  const maxRatio = Math.min(deviceRatio, 3);
+  const minRatio = Math.min(deviceRatio, 2);
   let pixelRatio = maxRatio;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(pixelRatio);
@@ -388,8 +402,7 @@ export function createView(canvas) {
   scene.add(new THREE.HemisphereLight(0xfff6e8, 0x2b8f92, 1.1));
   const sun = new THREE.DirectionalLight(0xffffff, 2.4);
   sun.castShadow = true;
-  const smallScreen = Math.min(window.screen?.width || 1000, window.screen?.height || 1000) < 900;
-  sun.shadow.mapSize.set(smallScreen ? 1024 : 2048, smallScreen ? 1024 : 2048);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
   scene.add(sun, sun.target);
@@ -522,6 +535,8 @@ export function createView(canvas) {
 
   function build(track) {
     clearLevel();
+    perf.ignore = 120;
+    perf.slow = 0;
     const { min, max } = track.bounds;
     const center = new THREE.Vector3((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
     view.center.copy(center);
@@ -693,9 +708,12 @@ export function createView(canvas) {
     const size = Math.max(max[0] - min[0], max[2] - min[2], max[1] - min[1]) + 2;
     sun.position.set(center.x - size * 0.6, center.y + size * 1.4, center.z - size * 0.35);
     sun.target.position.copy(center);
+    // The shadow camera looks along the light, so the machine's bounding sphere is all it
+    // needs to cover; a tighter frame means finer shadow edges.
+    const radius = 0.5 * Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) + 0.8;
     const cam = sun.shadow.camera;
-    cam.left = cam.bottom = -size;
-    cam.right = cam.top = size;
+    cam.left = cam.bottom = -radius;
+    cam.right = cam.top = radius;
     cam.near = 0.5;
     cam.far = size * 4;
     cam.updateProjectionMatrix();
@@ -899,17 +917,26 @@ export function createView(canvas) {
     }
   }
 
-  // Lower the render resolution if the device can't keep up, so the tilt stays smooth.
-  const perf = { time: 0, frames: 0 };
+  // Lower the render resolution (down to minRatio) if the device can't keep up, so the tilt
+  // stays smooth. The first frames after a level is built compile shaders and upload
+  // textures, so they are always slow and don't count; it takes two slow stretches in a row
+  // to step down.
+  const perf = { time: 0, frames: 0, ignore: 120, slow: 0 };
   function adaptResolution(dt) {
+    if (perf.ignore > 0) {
+      perf.ignore--;
+      return;
+    }
     perf.time += dt;
     perf.frames++;
     if (perf.frames < 90) return;
     const avg = perf.time / perf.frames;
     perf.time = 0;
     perf.frames = 0;
-    if (avg > 1 / 42 && pixelRatio > 1) {
-      pixelRatio = Math.max(1, pixelRatio - 0.25);
+    perf.slow = avg > 1 / 40 ? perf.slow + 1 : 0;
+    if (perf.slow >= 2 && pixelRatio > minRatio) {
+      pixelRatio = Math.max(minRatio, pixelRatio - 0.5);
+      perf.slow = 0;
       renderer.setPixelRatio(pixelRatio);
       resize();
     }

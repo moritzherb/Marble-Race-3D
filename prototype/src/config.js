@@ -24,5 +24,10 @@ export const CONTROLS = {
   directionAssist: true, // snap tilt to the 4 groove directions and 4 diagonals.
 };
 
+// Switches for playtesting. Turn every one of these off before the game is published.
+export const TESTING = {
+  unlockAllLevels: true, // every level can be played without finishing the one before it
+};
+
 export const MARBLE_RADIUS = 0.15;
 export const SIM_DT = 1 / 120;
