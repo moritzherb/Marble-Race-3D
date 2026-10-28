@@ -283,3 +283,13 @@ test('coins and paid levels survive a reload; bad values are dropped', () => {
   assert.equal(damaged.remaining('a', 10), 60);
   assert.equal(damaged.remaining('b', 10), 15);
 });
+
+test('the ad multiplier bonus adds whole coins once per call and refuses nonsense', () => {
+  const { player } = setup();
+  const before = player.coins();
+  assert.deepEqual(player.grantBonus(60, 'ad x3'), { ok: true, coins: before + 60 });
+  assert.equal(player.grantBonus(0, 'nothing').ok, false);
+  assert.equal(player.grantBonus(-5, 'negative').ok, false);
+  assert.equal(player.grantBonus(2.5, 'fraction').ok, false);
+  assert.equal(player.coins(), before + 60);
+});

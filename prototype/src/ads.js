@@ -1,5 +1,6 @@
-// Ads for the native app build: an optional rewarded ad that adds time after the clock runs
-// out, and an interstitial between levels, at most once every few completed levels.
+// Ads for the native app build: optional rewarded ads (extra time after the clock runs out,
+// or more coins after a win) and an interstitial between levels, at most once every few
+// completed levels.
 //
 // This file holds the rules only. The ad SDK sits behind a provider: ads-admob.js wraps
 // Google AdMob through Capacitor. A browser has no provider, so in the web build nothing here
@@ -25,6 +26,8 @@ export const DEFAULT_AD_CONFIG = {
   // While true, only Google's test ad units are requested, whatever `units` says.
   testMode: true,
   rewardedExtraTime: { enabled: true, seconds: 20, maxPerAttempt: 1 },
+  // After a win that paid coins: an ad multiplies them (the multiplier is in economy.js).
+  rewardedCoins: { enabled: true, maxPerWin: 1 },
   interstitial: { enabled: true, everyCompletedLevels: 3, notBeforeLevel: 11, quietAfterRewardedSeconds: 120 },
   loadTimeoutSeconds: 10,
   retryAfterSeconds: 30,
@@ -58,6 +61,7 @@ const pick = (...values) => values.find((v) => v !== undefined);
 export function mergeAdConfig(base, over, { remote = false } = {}) {
   const o = over && typeof over === 'object' ? over : {};
   const r = o.rewardedExtraTime || {};
+  const c = o.rewardedCoins || {};
   const i = o.interstitial || {};
   const units = (platform) => ({
     rewarded: pick(remote ? undefined : str(o.units?.[platform]?.rewarded), base.units[platform].rewarded),
@@ -70,6 +74,10 @@ export function mergeAdConfig(base, over, { remote = false } = {}) {
       enabled: pick(bool(r.enabled), base.rewardedExtraTime.enabled),
       seconds: pick(int(r.seconds, 5, 120), base.rewardedExtraTime.seconds),
       maxPerAttempt: pick(int(r.maxPerAttempt, 0, 3), base.rewardedExtraTime.maxPerAttempt),
+    },
+    rewardedCoins: {
+      enabled: pick(bool(c.enabled), base.rewardedCoins.enabled),
+      maxPerWin: pick(int(c.maxPerWin, 0, 3), base.rewardedCoins.maxPerWin),
     },
     interstitial: {
       enabled: pick(bool(i.enabled), base.interstitial.enabled),
@@ -172,6 +180,33 @@ export function createAds({ provider = null, config = DEFAULT_AD_CONFIG, store =
     return state.loading[kind];
   }
 
+  // Shows a loaded rewarded ad (waiting for one if needed). Resolves { granted, reason }:
+  // granted only when the SDK reports the reward was earned.
+  async function showRewarded() {
+    if (state.busy) return { granted: false, reason: 'busy' };
+    state.busy = true;
+    try {
+      if (!state.rewardedReady && !(await (preload('rewarded') || Promise.resolve(false)))) return { granted: false, reason: 'unavailable' };
+      state.rewardedReady = false;
+      let result;
+      try {
+        // A safety net in case the SDK never reports the ad closing (say the app was killed).
+        result = await withTimeout(state.provider.showRewarded(), SHOW_LIMIT_MS);
+      } catch {
+        return { granted: false, reason: 'unavailable' };
+      }
+      if (result?.shown) {
+        state.lastRewardedShownAt = now();
+        save();
+      }
+      if (!result?.rewarded) return { granted: false, reason: result?.shown ? 'closed-early' : 'unavailable' };
+      return { granted: true, reason: 'rewarded' };
+    } finally {
+      state.busy = false;
+      preload('rewarded');
+    }
+  }
+
   const ads = {
     get config() {
       return state.config;
@@ -205,7 +240,7 @@ export function createAds({ provider = null, config = DEFAULT_AD_CONFIG, store =
       } catch {
         state.canRequestAds = false;
       }
-      if (state.config.rewardedExtraTime.enabled) preload('rewarded');
+      if (state.config.rewardedExtraTime.enabled || state.config.rewardedCoins.enabled) preload('rewarded');
       if (state.config.interstitial.enabled) preload('interstitial');
       return ads.available();
     },
@@ -220,30 +255,27 @@ export function createAds({ provider = null, config = DEFAULT_AD_CONFIG, store =
     // when the SDK reports it was earned, and at most maxPerAttempt times for one attempt.
     async watchForExtraTime(attempt) {
       if (!ads.canOfferExtraTime(attempt)) return { granted: false, reason: 'not-offered' };
-      if (state.busy) return { granted: false, reason: 'busy' };
-      state.busy = true;
-      try {
-        if (!state.rewardedReady && !(await (preload('rewarded') || Promise.resolve(false)))) return { granted: false, reason: 'unavailable' };
-        state.rewardedReady = false;
-        let result;
-        try {
-          // A safety net in case the SDK never reports the ad closing (say the app was killed).
-          result = await withTimeout(state.provider.showRewarded(), SHOW_LIMIT_MS);
-        } catch {
-          return { granted: false, reason: 'unavailable' };
-        }
-        if (result?.shown) {
-          state.lastRewardedShownAt = now();
-          save();
-        }
-        if (!result?.rewarded) return { granted: false, reason: result?.shown ? 'closed-early' : 'unavailable' };
-        if (attempt.extraTimeUsed >= state.config.rewardedExtraTime.maxPerAttempt) return { granted: false, reason: 'already-used' };
-        attempt.extraTimeUsed++;
-        return { granted: true, seconds: state.config.rewardedExtraTime.seconds, reason: 'rewarded' };
-      } finally {
-        state.busy = false;
-        preload('rewarded');
-      }
+      const r = await showRewarded();
+      if (!r.granted) return r;
+      if (attempt.extraTimeUsed >= state.config.rewardedExtraTime.maxPerAttempt) return { granted: false, reason: 'already-used' };
+      attempt.extraTimeUsed++;
+      return { granted: true, seconds: state.config.rewardedExtraTime.seconds, reason: 'rewarded' };
+    },
+
+    // win: { coinsAdUsed } for one level win that paid coins.
+    canOfferCoins(win) {
+      const c = state.config.rewardedCoins;
+      return active() && c.enabled && win.coinsAdUsed < c.maxPerWin;
+    },
+
+    // Shows a rewarded ad for the coin multiplier. Resolves { granted, reason }.
+    async watchForCoins(win) {
+      if (!ads.canOfferCoins(win)) return { granted: false, reason: 'not-offered' };
+      const r = await showRewarded();
+      if (!r.granted) return r;
+      if (win.coinsAdUsed >= state.config.rewardedCoins.maxPerWin) return { granted: false, reason: 'already-used' };
+      win.coinsAdUsed++;
+      return { granted: true, reason: 'rewarded' };
     },
 
     // Call once for every level the player completes.

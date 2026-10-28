@@ -942,10 +942,23 @@ export function createView(canvas) {
     }
   }
 
+  // The machine springs into place (on the home screen, after a win).
+  let popT = 1;
+  function popIn() {
+    popT = 0;
+  }
+  function animatePop(dt) {
+    if (!pivot || popT >= 1) return;
+    popT = Math.min(1, popT + dt / 0.75);
+    const k = popT - 1; // ease out with a little overshoot
+    pivot.scale.setScalar(Math.max(0.01, 1 + 2.70158 * k ** 3 + 1.70158 * k ** 2));
+  }
+
   function frame(dt) {
     // Any resolution change happens before drawing: resizing clears the canvas, and doing
     // it after a render would show one empty frame.
     adaptResolution(dt);
+    animatePop(dt);
     if (view.spin) {
       view.targetYaw += dt * 0.22;
       view.yaw = view.targetYaw;
@@ -997,5 +1010,5 @@ export function createView(canvas) {
     outlines: current ? current.marbles.map((m) => m.ghost.visible) : [],
   });
 
-  return { build, sync, frame, resize, orbit, setSpin, screenToGround, showHintArrow, clearHint, renderer, debug };
+  return { build, sync, frame, resize, orbit, setSpin, popIn, screenToGround, showHintArrow, clearHint, renderer, debug };
 }

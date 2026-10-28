@@ -66,6 +66,22 @@ test('extra time is granted exactly once, even if the button is pressed twice', 
   assert.equal(ads.canOfferExtraTime({ extraTimeUsed: 0 }), true);
 });
 
+test('the coin multiplier ad pays once per win, and only when the ad was watched', async () => {
+  const ads = await ready(fakeProvider());
+  const win = { coinsAdUsed: 0 };
+  assert.ok(ads.canOfferCoins(win));
+  const [a, b] = await Promise.all([ads.watchForCoins(win), ads.watchForCoins(win)]);
+  assert.equal([a, b].filter((r) => r.granted).length, 1);
+  assert.equal(win.coinsAdUsed, 1);
+  assert.equal(ads.canOfferCoins(win), false);
+  const early = await ready(fakeProvider({ reward: false }));
+  const win2 = { coinsAdUsed: 0 };
+  assert.deepEqual(await early.watchForCoins(win2), { granted: false, reason: 'closed-early' });
+  assert.equal(win2.coinsAdUsed, 0);
+  const none = createAds({ timers: noTimers });
+  assert.equal(none.canOfferCoins({ coinsAdUsed: 0 }), false);
+});
+
 test('closing the ad before the reward grants nothing', async () => {
   const ads = await ready(fakeProvider({ reward: false }));
   const attempt = { extraTimeUsed: 0 };

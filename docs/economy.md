@@ -161,7 +161,7 @@ The card's options, in order:
 
 ## Power-ups
 
-**When they're available:** they unlock at level 11, after the teaching levels, with a one-time introduction. They only work while a level is being played: not on cards, not during the reference solution, and not after a win.
+**When they're available:** they unlock at level 11, after the teaching levels. From then on the level start card offers four of them before the level begins. They only work while a level is being played: not on cards, not during the reference solution, and not after a win.
 
 **Charging:**
 
@@ -286,22 +286,26 @@ Once per attempt.
 
 ## Interface
 
-- **Top of a level:**
-  - **Left:** Home, with ♥ lives under it.
-  - **Centre:** the clock.
-  - **Right:** Pause (Resume, Settings, Home), with the coin balance under it.
-- **Bottom of a level:**
-  - **The power-up row:** six wooden tokens, each with an icon and its price, sitting above the existing view and Restart buttons. The tokens sit outside the 3D canvas, so a drag that tilts the machine can't press one, and a tap on a token never tilts the machine.
-  - **Token states:** ready, too expensive (price in red), used up (dimmed), active (glow and a draining meter), or saved (Checkpoint).
-- **Tap to choose, tap again to use:** the first tap opens a small wooden tag above the row with the name, the effect, the price and a Use button. A second tap on the same token, or Use, buys it. The tag closes after a few seconds or on any other tap. That's quick, but a stray tap never spends coins.
+The style is a casual mobile game: glossy, colourful icons (coin, heart, stars and one for each power-up, all in `icons.js`), chunky buttons and as little text as possible. Feedback is shown, not explained: a power-up's icon pops up when it starts, "+10s" floats up when time is added, and a heart cracks in two and falls with "−1" when a life is lost.
+
 - **Home screen:**
-  - A ♥ token (lives and the next-life countdown, opens the lives card) and a coin token (opens a short explanation), above Play.
-- **Level list:** each unlocked level shows the coins still to earn on it ("+60"), and nothing once it has paid everything.
-- **Win card:** shows the coins just earned, split into completion and stars.
-- **First-time notes,** shown once each:
-  - the first lost life;
-  - the first coins;
-  - the first time the power-up row appears.
+  - **Top left:** Profile (only the icon for now; a later update).
+  - **Top right, from the right edge:** Settings, then ♥ lives (with the next-life countdown, opens the lives card), then coins.
+  - **Middle:** the game's name, the next machine turning slowly behind it, and "Level N" above a big green Play button. A hard level shows a flame and "Hard".
+  - **Bottom right:** Levels.
+  - **After a win,** Next brings the player here: the level number rolls on to the next one and the machine springs into place.
+- **Level start card** (from level 11): the level number, the stars earned so far, the time limit, and four power-ups to take into the level (Extra Time, Speed Boost, Hint, Open All Gates). Tap a tile to pick it (a green tick), tap again to drop it. Picks that the coins can't cover shake instead. The coins are taken, and the power-ups start, when the level starts. Each counts as that power-up's use for the attempt.
+- **Top of a level:** Pause (Resume, Home, Settings) on the left, the clock in the middle, coins and ♥ lives on the right.
+- **Bottom of a level:**
+  - **The power-up row:** six tiles, each with its icon and price, above the view and Restart buttons. The tiles sit outside the 3D canvas, so a drag that tilts the machine can't press one, and a tap on a tile never tilts the machine.
+  - **Tile states:** ready, too expensive (price in red), used up (grey), active (glow and a draining meter), or saved (Checkpoint).
+  - **Tap to choose, tap again to use:** the first tap opens a small tag above the row with the name, a few words on the effect and a Use button. A second tap on the same tile, or Use, buys it. A stray tap never spends coins.
+  - **Restart** shows a "−1 ♥" tag once restarting would cost a life.
+- **Bravo (a win):** the stars pop in, then the coins won as a heap with "+30", which fly to the coin counter. Next goes home. With ads available, a bar of multipliers (x2 x3 x5 x3 x2) sits under the coins with a pointer sweeping across it, and a blue button shows what the ad could pay ("60–150"). After the ad, the pointer swings and lands on a multiplier drawn by chance (`winMultiplier` in `economy.js`: x2 60%, x3 30%, x5 10%, about x2.6 on average), and the extra coins are paid. A small replay button plays the level again.
+- **Time's up:** a shaking clock and the marbles that made it home, then the ways to carry on: +15s for 90 coins, +20s for an ad, or back to a checkpoint. Home and Try again carry a "−1 ♥" tag when the loss costs a life, and the heart breaks when one of them is pressed.
+- **Lives, coins:** a big heart with the count and the countdown, or a big coin with the balance. "+1 ♥ for 150 coins" when lives aren't full.
+- **Level list:** numbered tiles with their stars: green when done, red with a flame for hard levels, grey with a padlock when locked.
+- **Tips:** a few words at the start of levels that bring in something new (`TIPS` in `levels.js`), and none elsewhere. Settings → Tips turns them off.
 
 ## Architecture
 
@@ -314,7 +318,9 @@ Once per attempt.
 | `prototype/src/hints.js` + `prototype/hints/*.json` | Hint lookup and the per-level tables |
 | `prototype/src/sim.js` | Three small hooks: `sim.speedScale`, `gate.forced` and `marble.pull` |
 | `prototype/src/render.js` | Hint arrow, marble halo and glow, gate cables lit by what plates really do |
-| `prototype/src/main.js` | Screens and cards: HUD, power-up row, home tokens, fail and win cards |
+| `prototype/src/main.js` | Screens and cards: HUD, power-up row, home screen, level start card, Bravo and Time's up |
+| `prototype/src/icons.js`, `fx.js` | The icon set, and the little animations (pops, the breaking heart, flying coins) |
+| `prototype/src/bonus.js` | The win multiplier: draws x2/x3/x5 with the configured chances |
 
 ### Saved data (`localStorage['mmr-player']`)
 
@@ -459,7 +465,7 @@ The system went in as five steps, each tested before the next. To check one by h
 
 **Checklist:**
 
-- [ ] Level 11 shows the power-up introduction once. The row sits under the machine.
+- [ ] Level 11 opens with the level start card. The row sits under the machine.
 - [ ] The first tap on a token opens its tag without spending. A second tap uses it.
 - [ ] Extra Time adds 10 s once. Speed Boost glows the marbles for 6 s. Open All Gates lifts every gate for 5 s, then they return to what the plates say.
 - [ ] Hint draws an arrow over the machine. After a losing first move it says the level can't be won from here, and charges nothing.

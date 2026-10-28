@@ -27,6 +27,7 @@ export const CONTROLS = {
 // Switches for playtesting. Turn every one of these off before the game is published.
 export const TESTING = {
   unlockAllLevels: true, // every level can be played without finishing the one before it
+  simulateAds: true, // in a browser (no ad SDK), stand-in test ads so the ad flows can be tried
 };
 
 export const MARBLE_RADIUS = 0.15;

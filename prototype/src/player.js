@@ -216,6 +216,14 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
         }
         return { total, parts: parts.map(({ amount, why }) => ({ amount, why })), coins: s.coins };
       }),
+    // Extra coins on top of a level's reward (the ad multiplier after a win).
+    grantBonus: (amount, why) =>
+      update((s, t) => {
+        if (!Number.isInteger(amount) || amount <= 0) return { ok: false, coins: s.coins };
+        s.coins += amount;
+        note(s, t, 'earn', amount, why);
+        return { ok: true, coins: s.coins };
+      }),
     // Spend coins on something; `apply(state)` returns false to cancel without a charge.
     pay: (cost, why, apply) => update((s, t) => pay(s, t, cost, why, apply)),
     buyLife: () =>

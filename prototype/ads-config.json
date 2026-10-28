@@ -6,6 +6,10 @@
     "seconds": 20,
     "maxPerAttempt": 1
   },
+  "rewardedCoins": {
+    "enabled": true,
+    "maxPerWin": 1
+  },
   "interstitial": {
     "enabled": true,
     "everyCompletedLevels": 3,

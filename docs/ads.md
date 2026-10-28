@@ -9,25 +9,26 @@ This page covers what the project can do with mobile ads, what was built, the pr
 | Engine and language | No game engine. Plain JavaScript (ES modules); three.js r170 draws the 3D scene. The rules and physics are engine-free JavaScript that also runs in Node for the tests. |
 | Native export | The game itself is a web page. It's now wrapped with **Capacitor 8**, which puts the page inside a real native app: `android/` is an Android Studio (Gradle) project and `ios/` is an Xcode project. Both were generated and configured, but **not built or run here**. This environment can't download the Android SDK, and iOS builds need a Mac with Xcode. |
 | Mobile ad SDK | Google AdMob through [`@capacitor-community/admob`](https://github.com/capacitor-community/admob) 8.2, a maintained Capacitor plugin. It bundles the official Google Mobile Ads SDK (25.4 on Android, 13.11 on iOS) and Google's User Messaging Platform (UMP) for consent, for both platforms. No custom native code is needed. |
-| The browser build | Ads can't work there: AdMob only serves native apps. In a browser the game finds no ad SDK, so **no ad buttons appear** and nothing changes. Web ads would need Google AdSense's H5 Games Ads on a domain you own, with AdSense approval. That isn't possible on the claude.ai preview page, which only allows scripts from a few CDNs. |
+| The browser build | Real ads can't work there: AdMob only serves native apps. Web ads would need Google AdSense's H5 Games Ads on a domain you own, with AdSense approval. That isn't possible on the claude.ai preview page, which only allows scripts from a few CDNs. **For playtesting**, while `TESTING.simulateAds` is on (`prototype/src/config.js`), the browser build uses stand-in ads (`ads-sim.js`): a dark screen labelled "Test ad · Simulated for playtesting", with a 3-second countdown and a Close button. They go through the same rules as real ads, so the ad buttons, the coin multiplier and the interstitial breaks can all be tried. The app never uses them, and the switch goes off before release. |
 
 ### Gaps to know about
 
 - **Lives and coins came later** (see [economy.md](economy.md)). The rewarded ad is still offered when the clock runs out, for +20 s, next to the coin second chance. Taking it doesn't cost a life, like the coin version.
 - **An ad for a life is not built yet.** The natural place is the out-of-lives card, next to Buy a life: the ad manager would get a `watchForLife` like `watchForExtraTime`, calling `player` to add the life only after the reward event.
 - **The app ID is a placeholder:** `com.marblemachinerush.app` (in `capacitor.config.json`, `android/app/build.gradle` and the Xcode project). Pick the final one before you create the AdMob apps and store listings. It can't change after release.
-- The Arimo font still loads from Google Fonts. Offline, the app falls back to a system font; everything else, three.js included, is bundled in the app.
+- The Fredoka font still loads from Google Fonts. Offline, the app falls back to the system's rounded font; everything else, three.js included, is bundled in the app.
 
 ## What was built
 
 | | Behaviour |
 |---|---|
 | **Rewarded: extra time** | When the clock runs out, the Time's up card offers **Watch an ad for +20 s**. The level carries on exactly where it stopped, with 20 seconds on the clock. It's offered once per attempt; "Try again" starts a new attempt. |
-| Reward only when earned | Time is added only when the SDK reports that the reward was earned (Google's `onUserEarnedReward`, the plugin's `onRewardedVideoAdReward`). Closing the ad, a failure to load or show, or a timeout grants nothing. The card then says so in plain words and keeps Home and Try again. |
+| **Rewarded: more coins** | After a win that paid coins, the Bravo screen offers a blue button with the range the ad can pay (say "60–150"). After the ad, a pointer lands on x2, x3 or x5, drawn by chance with the low ones more likely (`winMultiplier` in `economy.js`), and the extra coins are paid. Once per win (`rewardedCoins.maxPerWin`). |
+| Reward only when earned | Time or coins are added only when the SDK reports that the reward was earned (Google's `onUserEarnedReward`, the plugin's `onRewardedVideoAdReward`). Closing the ad, a failure to load or show, or a timeout grants nothing: a small "No reward" or "No ad" pops up, and the buttons stay. |
 | No double rewards | Pressing the button disables every button on the card until the ad is over. Only one ad request can be in flight, and the attempt's counter is checked again before the time is added. |
-| **Interstitial** | Only on **Next level** from the Level complete card, the break between levels. Never during a level, a marble run, the first ten (teaching) levels, or a menu. |
+| **Interstitial** | Only on **Next** from the Bravo screen, the break between levels. Never during a level, a marble run, the first ten (teaching) levels, or a menu. |
 | Frequency | One per 3 completed levels (counting from level 11). The count survives restarting the app. |
-| After a rewarded ad | No interstitial within 120 s of a rewarded ad, or after a level where extra time was used. |
+| After a rewarded ad | No interstitial within 120 s of a rewarded ad, or after a level where extra time or the coin multiplier was used. |
 | Unavailable | If no interstitial is loaded, the player goes straight on and the next break tries again. Nothing waits for an ad to load. |
 | Preloading | Both ads load in the background at start-up and again after each one is shown. Failed loads retry after 30 s, then 60, 120, up to 4 minutes. |
 | Timeouts | A rewarded ad that hasn't loaded within 10 s counts as unavailable. If the SDK never reports an ad closing (say the app is killed), the game gives up after 5 minutes. |
@@ -40,7 +41,8 @@ This page covers what the project can do with mobile ads, what was built, the pr
 |---|---|
 | `prototype/src/ads.js` | The rules: frequency cap, reward-once, timeouts, retries, config merging. No SDK code, so it's tested in Node. |
 | `prototype/src/ads-admob.js` | The AdMob provider: consent, loading and showing through the Capacitor plugin, and turning its events into "shown / rewarded". |
-| `prototype/src/main.js` | The two hooks: the Time's up card and Next level. |
+| `prototype/src/ads-sim.js` | Stand-in test ads for the browser build, used only while `TESTING.simulateAds` is on. |
+| `prototype/src/main.js` | The three hooks: the Time's up screen, the Bravo screen's multiplier, and Next. |
 | `prototype/ads-config.json` | Settings, bundled with the app (below). |
 | `android/app/src/main/res/values/strings.xml` | Android AdMob **app** ID (`admob_app_id`). |
 | `ios/App/App/Info.plist` | iOS AdMob app ID (`GADApplicationIdentifier`), SKAdNetwork IDs, tracking prompt text. |
@@ -54,6 +56,7 @@ This page covers what the project can do with mobile ads, what was built, the pr
 | `enabled` | `true` | Master switch |
 | `testMode` | `true` | Only Google's test ad units are requested, whatever `units` says. **Leave on until release.** |
 | `rewardedExtraTime.enabled / seconds / maxPerAttempt` | `true / 20 / 1` | The extra-time offer |
+| `rewardedCoins.enabled / maxPerWin` | `true / 1` | The coin multiplier offer after a win |
 | `interstitial.enabled / everyCompletedLevels / notBeforeLevel / quietAfterRewardedSeconds` | `true / 3 / 11 / 120` | Interstitial frequency |
 | `loadTimeoutSeconds`, `retryAfterSeconds` | `10`, `30` | Loading |
 | `remoteConfigUrl` | `""` | A JSON file with any of the keys above, fetched at start-up (see below) |
@@ -153,21 +156,21 @@ Run `npm run cap:sync` after each change to that file.
 
 ### 3. A failed or unavailable ad
 
-- **Closed early:** open the rewarded test ad and close it with its ✕ before the reward is granted; the ✕ appears after a few seconds. The card says "The ad closed before the end, so there's no extra time this round". No time is added.
+- **Closed early:** open the rewarded test ad and close it with its ✕ before the reward is granted; the ✕ appears after a few seconds. "No reward" pops up, and no time is added.
 - **No ad available:**
   1. Turn on flight mode.
   2. Force-quit and restart the app, so nothing is preloaded.
   3. Let a level time out and tap the button.
-  4. After up to 10 s the card says "No ad is available right now, so no extra time this round". Home and Try again work.
+  4. After up to 10 s "No ad" pops up and the ad button goes away. Home and Try again work.
 - **Ads switched off:** set `"rewardedExtraTime": { "enabled": false }`. The button disappears.
 
 ### 4. Interstitial frequency
 
 1. With the default settings, complete levels 11, 12 and 13.
-2. A test interstitial appears after you tap **Next level** on 13, and not after 11 or 12. The next one comes after 16.
+2. A test interstitial appears after you tap **Next** on 13, and not after 11 or 12. The next one comes after 16.
 3. The **Ads** line in Playtest tools counts "n of 3 levels since the last one".
 4. Use extra time on a level, then complete it. No interstitial follows it, even if one is due.
-5. With flight mode on, Next level goes straight to the next level.
+5. With flight mode on, Next goes straight home.
 6. Interstitials never appear during levels 1–10, during a level, or from Play again.
 
 ### 5. The iOS build

@@ -2058,8 +2058,25 @@ const DRAWN = [
   },
 ];
 
+// A few words shown at the start of the levels that bring in something new. (Every level's
+// `learn` sentence is for the docs and playtesters; players get these instead.)
+const TIPS = {
+  'first-tilt': 'Drag to tilt · let go to stop',
+  'two-grooves': 'Marbles stay in their groove',
+  fork: 'Junctions turn downhill',
+  'downhill-only': 'Ramps only go down',
+  counterweight: 'Plates hold gates open',
+  'hold-the-door': 'Try a diagonal tilt',
+  'blue-goes-first': 'Some goals open gates',
+  underpass: 'Grooves can tunnel under',
+  'passing-place': 'Park in the siding to pass',
+  'level-crossing': 'Striped shutters close when pressed',
+  'twin-machines': 'One tilt moves both machines',
+};
+
 export const LEVELS = [...FIRST_TEN, ...DRAWN].map((level) => {
-  if (!level.map) return level;
+  const tip = TIPS[level.id];
+  if (!level.map) return { ...level, tip };
   const { pieces, blocks, errors } = compileMap(level);
-  return { ...level, pieces, blocks, mapErrors: errors };
+  return { ...level, tip, pieces, blocks, mapErrors: errors };
 });

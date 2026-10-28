@@ -24,17 +24,22 @@ export const ECONOMY = {
   },
   // After the clock runs out: pay to carry on the same attempt. It doesn't cost a life.
   secondChance: { cost: 90, seconds: 15, perAttempt: 1 },
+  // After a win that paid coins: watch an ad to multiply them. The pointer stops on one of the
+  // segments; `chances` makes the low multipliers more likely (on average about x2.6).
+  winMultiplier: { segments: [2, 3, 5, 3, 2], chances: { 2: 0.6, 3: 0.3, 5: 0.1 } },
   powerUps: {
     unlockLevel: 11, // the power-up row appears from this level on
+    // Can be picked on the level start card, and then start working with the level.
+    atStart: ['time', 'speed', 'hint', 'gates'],
     // Shown in this order. `perAttempt` limits uses per try at a level.
     list: [
-      { id: 'time', name: 'Extra Time', cost: 60, perAttempt: 1, seconds: 10, about: 'Adds 10 seconds to the clock.' },
-      { id: 'speed', name: 'Speed Boost', cost: 50, perAttempt: 1, duration: 6, factor: 1.4, about: 'All marbles roll 40% faster for 6 seconds.' },
-      { id: 'hint', name: 'Hint', cost: 80, perAttempt: 3, duration: 4, about: 'Shows the best next tilt from where the marbles are.' },
-      { id: 'gates', name: 'Open All Gates', cost: 140, perAttempt: 1, duration: 5, about: 'Every gate and shutter stands open for 5 seconds.' },
+      { id: 'time', name: 'Extra Time', cost: 60, perAttempt: 1, seconds: 10, about: '+10 seconds' },
+      { id: 'speed', name: 'Speed Boost', cost: 50, perAttempt: 1, duration: 6, factor: 1.4, about: 'Faster marbles · 6 s' },
+      { id: 'hint', name: 'Hint', cost: 80, perAttempt: 3, duration: 4, about: 'Shows the next tilt' },
+      { id: 'gates', name: 'Open All Gates', cost: 140, perAttempt: 1, duration: 5, about: 'Every gate open · 5 s' },
       // strength: the pull as a fraction of a full tilt (a full tilt the other way still wins); maxRoute: blocks along the grooves.
-      { id: 'magnet', name: 'Magnetic Pull', cost: 160, perAttempt: 1, duration: 5, strength: 0.6, maxRoute: 12, about: 'Pick a marble: for 5 seconds it is pulled along the grooves towards its own goal.' },
-      { id: 'checkpoint', name: 'Checkpoint', cost: 220, perAttempt: Infinity, about: 'Saves this moment. If you then lose, you can carry on from here once.' },
+      { id: 'magnet', name: 'Magnetic Pull', cost: 160, perAttempt: 1, duration: 5, strength: 0.6, maxRoute: 12, about: 'Pulls a marble home · 5 s' },
+      { id: 'checkpoint', name: 'Checkpoint', cost: 220, perAttempt: Infinity, about: 'Lose? Carry on from here' },
     ],
   },
 };

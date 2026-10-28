@@ -1,31 +1,21 @@
-// The power-up row at the bottom of a level, and the tag that explains a power-up before it
-// is bought. Tap a token: the tag opens with its name, effect and price. Tap the same token
-// again, or Use, to buy it. A stray tap never spends coins, and the tokens sit outside the
-// 3D canvas, so tilting the machine can't press them.
+// The power-up row at the bottom of a level, and the tag that names a power-up before it is
+// bought. Tap a tile: the tag opens with its name, what it does and the price. Tap the same
+// tile again, or Use, to buy it. A stray tap never spends coins, and the tiles sit outside
+// the 3D canvas, so tilting the machine can't press them.
 
 import { ECONOMY } from './economy.js';
-
-const svg = (body, extra = '') => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${body}</svg>`;
-
-export const POWER_ICONS = {
-  time: svg('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4.2l2.8 1.7M9.5 2.8h5M12 2.8v3.2M18.6 6.4l1.4-1.4"/>'),
-  speed: svg('<path d="M4.5 6l6 6-6 6M12.5 6l6 6-6 6"/>'),
-  hint: svg('<path d="M12 2.8a6.7 6.7 0 0 0-3.9 12.2c.6.4.9 1 .9 1.7V17h6v-.3c0-.7.3-1.3.9-1.7A6.7 6.7 0 0 0 12 2.8z" fill="currentColor" stroke="none"/><path d="M9.5 19.5h5M10.5 21.7h3"/>'),
-  gates: svg('<path d="M5 21V9M19 21V9"/><rect x="3.5" y="3.5" width="17" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><path d="M12 19.5v-7.5M9 14.8l3-3 3 3"/>'),
-  magnet: svg('<path d="M5.5 3.5h4v8.2a2.5 2.5 0 0 0 5 0V3.5h4v8.2a6.5 6.5 0 0 1-13 0z" fill="currentColor" stroke="none"/><path d="M5.5 3.5h4v3h-4zM14.5 3.5h4v3h-4z" fill="#e0533b" stroke="none"/>'),
-  checkpoint: svg('<path d="M6 21.5V3.5"/><path d="M6 4h11.5l-2.6 4 2.6 4H6" fill="currentColor"/>'),
-};
+import { ICONS } from './icons.js';
 
 const REASONS = {
-  coins: (p, coins) => `That needs ${p.cost} coins and you have ${coins}.`,
-  used: (p) => (p.perAttempt > 1 ? `All ${p.perAttempt} used in this attempt.` : 'Already used in this attempt.'),
-  active: () => 'Already running.',
-  'not now': () => 'Only while a level is being played.',
-  locked: () => `Unlocks at level ${ECONOMY.powerUps.unlockLevel}.`,
-  saved: () => 'A checkpoint is saved. If you lose this attempt, you can carry on from it.',
+  coins: (p) => `Needs ${p.cost} ${ICONS.coin}`,
+  used: () => 'Used up for this try',
+  active: () => 'Already on',
+  'not now': () => 'Only while playing',
+  locked: () => `From level ${ECONOMY.powerUps.unlockLevel}`,
+  saved: () => 'Saved',
 };
 
-export function createPowerBar({ bar, tag, powerups, player, context, use, coinIcon }) {
+export function createPowerBar({ bar, tag, powerups, player, context, use }) {
   let armed = null;
   let timer = null;
   let onCustomClick = null;
@@ -44,8 +34,8 @@ export function createPowerBar({ bar, tag, powerups, player, context, use, coinI
     document.body.classList.toggle('with-powers', !locked);
     bar.innerHTML = list()
       .map(
-        (p) => `<button class="token pu" data-pu="${p.id}" type="button" aria-label="${p.name}, ${p.cost} coins">
-        ${POWER_ICONS[p.id] || ''}<span class="price">${p.cost}${coinIcon}</span><i class="meter"></i></button>`,
+        (p) => `<button class="pu" data-pu="${p.id}" type="button" aria-label="${p.name}, ${p.cost} coins">
+        ${ICONS[p.id] || ''}<span class="price">${ICONS.coin}${p.cost}</span><i class="meter"></i></button>`,
       )
       .join('');
     update();
@@ -56,13 +46,13 @@ export function createPowerBar({ bar, tag, powerups, player, context, use, coinI
     const reason = powerups.blocker(id, context());
     const blocked = reason && !message;
     tag.innerHTML = `
-      <h3>${POWER_ICONS[id] || ''}${p.name}</h3>
+      <h3>${ICONS[id] || ''}${p.name}</h3>
       <p>${p.about}</p>
       ${message ? `<p class="why">${message}</p>` : reason ? `<p class="why">${reasonText(p, reason)}</p>` : ''}
-      ${message ? '' : `<button class="btn${blocked ? '' : ' primary'}" data-use="${id}" type="button"${blocked ? ' disabled' : ''}>Use <span class="cost">· ${p.cost} ${coinIcon}</span></button>`}`;
+      ${message ? '' : `<button class="gbtn wide" data-use="${id}" type="button"${blocked ? ' disabled' : ''}>Use <span class="cost">${ICONS.coin}${p.cost}</span></button>`}`;
     tag.hidden = false;
     clearTimeout(timer);
-    timer = setTimeout(disarm, message ? 3200 : 4500);
+    timer = setTimeout(disarm, message ? 2600 : 4500);
   }
 
   function arm(id) {
@@ -79,7 +69,7 @@ export function createPowerBar({ bar, tag, powerups, player, context, use, coinI
     for (const b of bar.querySelectorAll('.pu')) b.classList.remove('armed');
   }
 
-  // A message about `id` in the tag (why it couldn't be used, or what happened).
+  // A short message about `id` in the tag (why it couldn't be used).
   function message(id, text) {
     armed = null;
     for (const b of bar.querySelectorAll('.pu')) b.classList.remove('armed');
