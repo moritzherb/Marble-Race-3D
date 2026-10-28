@@ -25,7 +25,7 @@ const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const WIN = -1;
 
 // Every reachable position and the move graph between them.
-export function explore(level, maxStates = 20000) {
+export function explore(level, maxStates = 20000, { graph = false } = {}) {
   const track = buildTrack(level);
   if (track.errors.length) return { errors: track.errors };
   const start = createSim(track);
@@ -122,6 +122,8 @@ export function explore(level, maxStates = 20000) {
     dead: 1 - good.filter(Boolean).length / n,
     random: p[0] || 0,
     path,
+    // The whole move graph, for the hint tables (tools/hints.mjs).
+    graph: graph ? { keys: [...ids.keys()], next, toWin, win: WIN } : undefined,
   };
 }
 

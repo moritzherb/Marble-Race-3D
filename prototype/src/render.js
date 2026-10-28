@@ -4,7 +4,7 @@
 import * as THREE from './three.js';
 import { RAIL_Y, pieceCells } from './pieces.js';
 import { sampleEdge } from './track.js';
-import { machineRotation } from './tilt.js';
+import { machineRotation, directionVector } from './tilt.js';
 
 export const MARBLE_COLORS = {
   blue: 0x2f6fe4,
@@ -700,7 +700,7 @@ export function createView(canvas) {
     cam.far = size * 4;
     cam.updateProjectionMatrix();
 
-    current = { track, goals, plates, gates, cables, marbles, inTunnel };
+    current = { track, goals, plates, gates, cables, marbles, inTunnel, hint: null };
     fitCamera();
     view.distance = view.targetDistance;
   }
@@ -752,10 +752,78 @@ export function createView(canvas) {
   const tmpAxis = new THREE.Vector3();
   const tmpDir = new THREE.Vector3();
 
+  // Hint power-up: a big arrow lying over the machine, pointing the way to tilt. It lives in
+  // machine coordinates, so it stays right when the view is turned.
+  function showHintArrow(dir, seconds) {
+    if (!current) return;
+    clearHint();
+    const { min, max } = current.track.bounds;
+    const length = Math.min(3.2, Math.max(1.6, Math.min(max[0] - min[0], max[2] - min[2]) * 0.65));
+    const w = 0.2;
+    const head = 0.62;
+    const shape = new THREE.Shape();
+    shape.moveTo(-length / 2, -w);
+    shape.lineTo(length / 2 - head, -w);
+    shape.lineTo(length / 2 - head, -w * 2.6);
+    shape.lineTo(length / 2, 0);
+    shape.lineTo(length / 2 - head, w * 2.6);
+    shape.lineTo(length / 2 - head, w);
+    shape.lineTo(-length / 2, w);
+    shape.closePath();
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const group = new THREE.Group();
+    const back = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false }));
+    back.scale.setScalar(1.16);
+    const front = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x1f7c80, transparent: true, opacity: 0.95, depthTest: false }));
+    front.position.y = 0.01;
+    back.renderOrder = 20;
+    front.renderOrder = 21;
+    group.add(back, front);
+    const [dx, dz] = directionVector(dir);
+    group.rotation.y = Math.atan2(-dz, dx);
+    group.position.set((min[0] + max[0]) / 2, max[1] + 0.5, (min[2] + max[2]) / 2);
+    content.add(group);
+    current.hint = { group, mats: [back.material, front.material], geo, left: seconds, total: seconds };
+  }
+
+  function clearHint() {
+    const h = current?.hint;
+    if (!h) return;
+    content.remove(h.group);
+    h.geo.dispose();
+    h.mats.forEach((m) => m.dispose());
+    current.hint = null;
+  }
+
+  function updateEffects(sim, dt) {
+    const h = current.hint;
+    if (h) {
+      h.left -= dt;
+      if (h.left <= 0) clearHint();
+      else {
+        const fade = Math.min(1, h.left / 0.4, (h.total - h.left) / 0.2);
+        const beat = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(clock * 7);
+        h.mats[1].opacity = 0.95 * fade * beat;
+        h.mats[0].opacity = 0.9 * fade;
+        h.group.position.y = current.track.bounds.max[1] + 0.5 + (reducedMotion ? 0 : 0.06 * Math.sin(clock * 4));
+      }
+    }
+    // Speed Boost: a warm glow on every marble while it runs.
+    const boosted = (sim.speedScale || 1) > 1;
+    sim.marbles.forEach((m, i) => {
+      const mat = current.marbles[i].mesh.material;
+      const target = boosted && !m.delivered ? 0.35 + (reducedMotion ? 0 : 0.15 * Math.sin(clock * 9 + i)) : 0;
+      mat.emissive.setHex(0xff7a2e);
+      mat.emissiveIntensity += (target - mat.emissiveIntensity) * Math.min(1, dt * 10);
+    });
+  }
+
   // Bring the scene up to date with the simulation.
   function sync(sim, tiltVec, dt) {
     if (!current) return;
     clock += dt;
+    updateEffects(sim, dt);
     const { axis, angle } = machineRotation(tiltVec);
     pivot.quaternion.setFromAxisAngle(tmpAxis.set(axis[0], axis[1], axis[2]).normalize(), angle);
 
@@ -797,7 +865,8 @@ export function createView(canvas) {
     for (const c of current.cables) {
       // The cable lights up while its plate or goal is powering it: that opens a gate
       // and shuts a shutter.
-      const powered = sim.gates[c.gate].open !== c.inverse;
+      const gate = sim.gates[c.gate];
+      const powered = gate.powered ?? gate.open !== c.inverse;
       const glow = powered ? 0.55 : 0;
       c.mat.emissiveIntensity += (glow - c.mat.emissiveIntensity) * ease(8);
       for (const m of c.posts) m.emissiveIntensity = c.mat.emissiveIntensity * 0.6;
@@ -879,5 +948,5 @@ export function createView(canvas) {
     outlines: current ? current.marbles.map((m) => m.ghost.visible) : [],
   });
 
-  return { build, sync, frame, resize, orbit, setSpin, screenToGround, renderer, debug };
+  return { build, sync, frame, resize, orbit, setSpin, screenToGround, showHintArrow, clearHint, renderer, debug };
 }

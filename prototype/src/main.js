@@ -13,7 +13,10 @@ import { loadSettings, saveSettings, loadProgress, recordResult, resetProgress, 
 import { createAds, loadAdConfig } from './ads.js';
 import { admobProvider, nativePlatform } from './ads-admob.js';
 import { createPlayer, clockText } from './player.js';
-import { ECONOMY } from './economy.js';
+import { ECONOMY, powerUp } from './economy.js';
+import { createPowerUps } from './powerups.js';
+import { createPowerBar, POWER_ICONS } from './powerbar.js';
+import { decodeTable, findHint } from './hints.js';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_PHYSICS = { ...PHYSICS };
@@ -62,6 +65,12 @@ async function startAds() {
 const player = createPlayer({ legacyPaid: () => Object.fromEntries(Object.entries(loadProgress()).map(([id, p]) => [id, Math.min(3, Math.max(1, p.stars || 1))])) });
 const HEART = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.2s-7.6-4.7-9.7-9.4C.8 8.3 2.9 4.4 6.7 4.4c2.1 0 3.6 1.2 5.3 3.3 1.7-2.1 3.2-3.3 5.3-3.3 3.8 0 5.9 3.9 4.4 7.4-2.1 4.7-9.7 9.4-9.7 9.4z"/></svg>';
 const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#e8b23a"/><circle cx="12" cy="12" r="9" fill="none" stroke="#a8730f" stroke-width="2"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff1c2" stroke-width="1.6" opacity=".85"/></svg>';
+// Power-ups (from level 11): rules in powerups.js, the row of tokens in powerbar.js.
+const powerups = createPowerUps({ player });
+const puContext = () => ({ sim: game.sim, playing: game.screen === 'game' && game.phase === 'playing' && !game.autoplay, levelIndex: game.index, addTime });
+const powerBar = createPowerBar({ bar: $('powerbar'), tag: $('ptag'), powerups, player, context: puContext, use: usePowerUp, coinIcon: COIN });
+setInterval(() => powerBar.update(), 120);
+
 const livesLine = ({ lives, max, nextIn }) => (nextIn === null ? `${lives}/${max} · Full` : `${lives}/${max} · Next life in ${clockText(nextIn)}`);
 
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
@@ -134,6 +143,10 @@ function play(index = game.index) {
   view.setSpin(false);
   showHint(game.level.learn);
   restart(false);
+  if (!game.autoplay && game.index + 1 >= ECONOMY.powerUps.unlockLevel && !player.seen('powerups')) {
+    player.markSeen('powerups');
+    openCard('powerIntro');
+  }
 }
 
 function restart(logIt = true) {
@@ -152,6 +165,9 @@ function restart(logIt = true) {
   game.tilts = 0;
   game.acc = 0;
   game.attempt = { extraTimeUsed: 0, secondChance: 0 }; // per-try counters for ads and coins
+  powerups.reset(game.sim);
+  view.clearHint();
+  powerBar.render(game.index);
   game.timerRunning = settings.timerStart === 'appear';
   game.autoplay = null;
   $('banner').hidden = true;
@@ -164,6 +180,7 @@ function restart(logIt = true) {
 function win() {
   game.phase = 'won';
   player.clearAttempt();
+  endPowerUps();
   releaseTilt();
   const t = game.elapsed;
   const stars = t <= game.times.gold ? 3 : t <= game.times.par ? 2 : 1;
@@ -186,6 +203,7 @@ function win() {
 function fail() {
   game.phase = 'failed';
   game.timeLeft = 0;
+  endPowerUps();
   releaseTilt();
   if (!game.autoplay) player.loseAttempt();
   if (!game.autoplay) logAttempt('time-up');
@@ -258,6 +276,86 @@ function lossNote() {
   const first = !player.seen('lives');
   if (first) player.markSeen('lives');
   return `<p class="note">Trying again or going home costs 1 life: you'll have ${lives - 1} of ${ECONOMY.lives.max}.${first ? ` Lives come back one every ${ECONOMY.lives.regenMinutes} minutes, even with the game closed.` : ''}</p>`;
+}
+
+// ---------- Power-ups ----------
+
+function flash(text, ms = 1600) {
+  const b = $('banner');
+  b.textContent = text;
+  b.hidden = false;
+  clearTimeout(flash.timer);
+  flash.timer = setTimeout(() => {
+    if (b.textContent === text) b.hidden = true;
+  }, ms);
+}
+
+function addTime(seconds) {
+  game.timeLeft += seconds;
+  flash(`+${seconds} s`);
+  updateClock();
+}
+
+function endPowerUps() {
+  powerups.endAll(game.sim);
+  view.clearHint();
+  powerBar.disarm();
+  powerBar.update();
+}
+
+const FEEDBACK = {
+  speed: (p) => `Speed Boost · ${p.duration} s`,
+  gates: (p) => `Every gate open · ${p.duration} s`,
+};
+
+function usePowerUp(id) {
+  if (id === 'hint') return useHint();
+  const r = powerups.activate(id, puContext());
+  if (!r.ok) return powerBar.message(id, powerBar.reasonText(id, r.reason));
+  audio.playEvent({ type: 'platePress' });
+  if (FEEDBACK[id]) flash(FEEDBACK[id](powerUp(id)));
+  updateLives();
+  powerBar.update();
+}
+
+// Hint: look the position up in the level's table (see hints.js). Finding no hint is free.
+const hintTables = new Map();
+function loadHints(id) {
+  if (!hintTables.has(id)) {
+    const table = fetch(`./hints/${id}.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then(decodeTable)
+      .catch(() => {
+        hintTables.delete(id);
+        return null;
+      });
+    hintTables.set(id, table);
+  }
+  return hintTables.get(id);
+}
+const defaultFeel = () => Object.keys(DEFAULT_PHYSICS).every((k) => PHYSICS[k] === DEFAULT_PHYSICS[k]);
+
+async function useHint() {
+  const reason = powerups.blocker('hint', puContext());
+  if (reason) return powerBar.message('hint', powerBar.reasonText('hint', reason));
+  if (!defaultFeel()) return powerBar.message('hint', 'Hints need the default feel settings (Playtest tools → Reset tuning).');
+  const level = game.level;
+  powerBar.custom(`<h3>${POWER_ICONS.hint}Hint</h3><p>Thinking…</p>`, 4000);
+  const table = await loadHints(level.id);
+  await new Promise((r) => setTimeout(r, 20)); // let "Thinking…" show before the search
+  if (game.level !== level || game.phase !== 'playing') return powerBar.disarm();
+  if (!table) return powerBar.message('hint', "Hints couldn't be loaded. Check the connection and try again.");
+  const h = findHint(table, game.sim);
+  if (!h.dir) {
+    return powerBar.message('hint', h.dead ? "From here this level can't be won any more. Restart to try again." : 'No hint from this position. Let the marbles settle, then try again.');
+  }
+  const r = powerups.activate('hint', puContext(), { hint: h });
+  if (!r.ok) return powerBar.message('hint', powerBar.reasonText('hint', r.reason));
+  powerBar.disarm();
+  view.showHintArrow(h.dir, powerUp('hint').duration);
+  flash(h.left === 1 ? 'Tilt the way the arrow points to finish.' : 'Tilt the way the arrow points, and hold until everything stops.', 3800);
+  updateLives();
+  powerBar.update();
 }
 
 // "Buy a life · 150" on the lives cards, or why it can't be bought.
@@ -346,7 +444,7 @@ $('homeSettings').addEventListener('click', () => openCard('settings'));
 $('homeBtn').addEventListener('click', () => !game.adShowing && requestGiveUp('leave', showHome));
 $('homeLives').addEventListener('click', () => openCard('lives'));
 $('homeCoins').addEventListener('click', () => openCard('coins'));
-$('settingsBtn').addEventListener('click', () => openCard('settings'));
+$('settingsBtn').addEventListener('click', () => openCard('pause'));
 $('restartBtn').addEventListener('click', () => {
   if (game.adShowing) return;
   audio.unlock();
@@ -381,6 +479,7 @@ function frame(now) {
 
 function tick(dt) {
   if (game.autoplay) driveAutoplay(dt);
+  if (game.screen === 'game' && game.phase === 'playing' && powerups.tick(dt, game.sim).length) powerBar.update();
   game.acc += dt;
   while (game.acc >= SIM_DT) {
     updateTilt(game.tilt, SIM_DT);
@@ -452,7 +551,7 @@ function watchSolution() {
 function updateClock() {
   const t = Math.max(0, game.timeLeft);
   $('time').textContent = t >= 10 ? Math.ceil(t) : t.toFixed(1);
-  $('timeBar').style.transform = `scaleX(${game.times ? t / game.times.limit : 1})`;
+  $('timeBar').style.transform = `scaleX(${game.times ? Math.min(1, t / game.times.limit) : 1})`;
   $('clock').classList.toggle('low', game.phase === 'playing' && game.timerRunning && t <= 5);
   $('timerNote').hidden = game.timerRunning || game.phase !== 'playing';
 }
@@ -494,7 +593,7 @@ const LOCK =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
 
 // Cards opened from a menu pause the game; win and time-up cards don't need to.
-const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools', 'giveUp', 'lives', 'noLives', 'notice', 'coins']);
+const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools', 'giveUp', 'lives', 'noLives', 'notice', 'coins', 'pause', 'powerIntro']);
 const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator;
 
 function openCard(kind, data = {}) {
@@ -584,6 +683,7 @@ const ACTIONS = {
   levelsBack: () => (game.levelsFrom === 'tools' ? openCard('tools') : closeCard()),
   pick: (el) => requestGiveUp('leave', () => play(Number(el.dataset.i))),
   solution: () => requestGiveUp('leave', watchSolution),
+  pauseHome: () => requestGiveUp('leave', showHome),
   buyLife: (el) => {
     if (el.disabled) return;
     el.disabled = true;
@@ -728,6 +828,22 @@ const CARDS = {
       <li>Gold coins are earned by playing. They can't be bought.</li>
     </ul>
     <button class="btn primary wide" data-act="close" type="button">OK</button>`,
+  pause: () => `
+    <h2>Paused</h2>
+    <button class="btn primary wide" data-act="close" type="button">Resume</button>
+    <div class="row">
+      <button class="btn" data-act="settings" type="button">Settings</button>
+      <button class="btn" data-act="pauseHome" type="button">Home</button>
+    </div>`,
+  powerIntro: () => `
+    <h2>Power-ups</h2>
+    <p>From here on, a row of power-ups sits under the machine. Each costs gold coins and can be used a limited number of times per attempt.</p>
+    <ul class="pu-list">${powerups
+      .list()
+      .map((p) => `<li>${POWER_ICONS[p.id]}<span><b>${p.name}.</b> ${p.about}</span><span class="price">${p.cost}${COIN}</span></li>`)
+      .join('')}</ul>
+    <p class="fine">Tap a power-up to see what it does; tap it again to use it. Coins are only taken when it works.</p>
+    <button class="btn primary wide" data-act="close" type="button">Got it</button>`,
   notice: ({ title, text }) => `
     <h2>${title}</h2>
     <p>${text}</p>
@@ -948,4 +1064,4 @@ if (hot?.ready) hot.ready(start);
 else start(hot?.data ?? {});
 
 // For automated checks and debugging in the browser console.
-window.__mmr = { game, play, showHome, restart, LEVELS, view, ads, player };
+window.__mmr = { game, play, showHome, restart, LEVELS, view, ads, player, powerups, usePowerUp };

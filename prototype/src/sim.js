@@ -18,6 +18,7 @@ export function createSim(track) {
     s: st.s,
     v: 0,
     delivered: false,
+    pull: null, // extra gravity for this marble only (Magnetic Pull), machine coordinates
     pos: sampleEdge(track.edges[st.edge], st.s).pos,
     tangent: [1, 0, 0],
     distance: 0, // total rolled distance, for spinning the marble mesh
@@ -27,7 +28,8 @@ export function createSim(track) {
     marbles,
     goals: track.goals.map((g) => ({ ...g, filled: false })),
     plates: track.plates.map((p) => ({ ...p, pressed: false })),
-    gates: track.gates.map((g) => ({ ...g, open: false })),
+    gates: track.gates.map((g) => ({ ...g, open: false, powered: false, forced: false })),
+    speedScale: 1, // Speed Boost: multiplies how hard gravity pushes along grooves, and the speed cap
     time: 0,
   };
   updateMechanisms(sim, []);
@@ -45,12 +47,14 @@ export function stepSim(sim, dt, g) {
   const P = PHYSICS;
   const roll = P.rollFactor;
   const aRef = roll * P.gravity * Math.sin((P.maxTiltDeg * Math.PI) / 180);
+  const boost = sim.speedScale || 1;
 
   for (const m of sim.marbles) {
     if (m.delivered) continue;
     const edge = sim.track.edges[m.edge];
     const { tangent } = sampleEdge(edge, m.s);
-    const a = roll * dot(g, tangent) + junctionPull(sim, m, edge, g);
+    const gm = m.pull ? [g[0] + m.pull[0], g[1] + m.pull[1], g[2] + m.pull[2]] : g;
+    const a = (roll * dot(gm, tangent) + junctionPull(sim, m, edge, gm)) * boost;
 
     // Drag is low while gravity pushes along the groove and high when it doesn't,
     // so marbles stop quickly when you let go or tilt across their groove.
@@ -61,11 +65,11 @@ export function stepSim(sim, dt, g) {
     v *= Math.exp(-drag * dt);
     const rr = P.rollingResistance * dt;
     v = Math.abs(v) <= rr ? 0 : v - Math.sign(v) * rr;
-    v = Math.max(-P.maxSpeed, Math.min(P.maxSpeed, v));
+    v = Math.max(-P.maxSpeed * boost, Math.min(P.maxSpeed * boost, v));
     m.v = v;
 
     const before = { edge: m.edge, s: m.s };
-    moveAlong(sim, m, v * dt, g, events);
+    moveAlong(sim, m, v * dt, gm, events);
     blockAtGates(sim, m, before, events);
   }
 
@@ -268,7 +272,9 @@ function updateMechanisms(sim, events) {
     const powered =
       sim.plates.some((p) => p.link === gate.link && p.pressed) ||
       sim.goals.some((g) => g.link === gate.link && g.filled);
-    gate.open = gate.inverse ? !powered : powered;
+    gate.powered = powered;
+    // Open All Gates forces every gate and shutter open; the plates keep working underneath.
+    gate.open = gate.forced || (gate.inverse ? !powered : powered);
     if (gate.open !== was) events.push({ type: gate.open ? 'gateOpen' : 'gateClose', link: gate.link });
     if (!gate.open) {
       // A gate closing on a marble pushes it out to whichever side it is on.

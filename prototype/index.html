@@ -173,6 +173,47 @@
     pointer-events: none;
   }
   .bottom > * { pointer-events: auto; }
+  .bottom { flex-direction: column; gap: 10px; }
+  .controls { display: flex; justify-content: center; align-items: center; gap: 14px; }
+  /* Power-ups: a row of wooden tokens, above the view and Restart buttons. */
+  .powerbar { display: flex; justify-content: center; gap: 7px; max-width: 100%; }
+  .pu { position: relative; width: 50px; height: 58px; padding: 7px 0 6px; border-radius: 13px; display: grid; justify-items: center; align-content: space-between; }
+  .pu .ico { width: 25px; height: 25px; color: var(--go); }
+  .pu .price { display: inline-flex; align-items: center; gap: 2px; font: 700 12px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .pu .price svg { width: 11px; height: 11px; }
+  .pu.short .price { color: var(--alarm); }
+  .pu.used { opacity: 0.42; }
+  .pu.locked { display: none; }
+  .pu.armed { outline: 3px solid #fff; outline-offset: 1px; }
+  .pu.active { background: #fff3cf; box-shadow: inset 0 -3px 0 var(--maple-edge), 0 0 0 3px #ffcf5a, 0 0 16px rgba(255, 196, 64, 0.75); }
+  .pu .meter { position: absolute; left: 7px; right: 7px; bottom: 3px; height: 3px; border-radius: 2px; background: #e0a92e; transform-origin: left; transform: scaleX(var(--p, 0)); }
+  .pu .badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--go); color: #fff; font: 700 11px/18px var(--font-display); }
+  .ptag {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 146px);
+    transform: translateX(-50%);
+    width: min(330px, calc(100vw - 32px));
+    background: var(--maple);
+    border-radius: 14px;
+    box-shadow: inset 0 -4px 0 var(--maple-edge), 0 8px 24px rgba(0, 0, 0, 0.22);
+    padding: 12px 14px 14px;
+    display: grid;
+    gap: 8px;
+  }
+  .ptag h3 { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 16px/1.2 var(--font-display); color: var(--ink); }
+  .ptag h3 svg { width: 22px; height: 22px; color: var(--go); }
+  .ptag p { margin: 0; font-size: 13.5px; line-height: 1.35; color: var(--ink-soft); }
+  .ptag .why { color: var(--alarm); font-weight: 600; }
+  .ptag .btn { width: 100%; }
+  .picker { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .picker button { width: 44px; height: 44px; border-radius: 50%; background: var(--c); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25), 0 0 0 3px #fff; }
+  .pu-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .pu-list li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; font-size: 14px; color: var(--ink-soft); }
+  .pu-list li svg.ico { width: 24px; height: 24px; color: var(--go); }
+  .pu-list b { color: var(--ink); }
+  .pu-list .price { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: var(--ink); }
+  .pu-list .price svg { width: 14px; height: 14px; }
   .round { width: 48px; height: 48px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
   .round svg { width: 24px; height: 24px; }
   .restart { padding: 12px 22px; font: 600 17px/1 var(--font-display); }
@@ -182,6 +223,7 @@
     left: 50%;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
     transform: translateX(-50%);
+    z-index: 2;
     background: var(--ink);
     color: var(--maple);
     padding: 6px 12px;
@@ -266,8 +308,9 @@
   th { color: var(--ink-soft); font-weight: 700; }
   ul.howto { margin: 0; padding-left: 18px; color: var(--ink-soft); display: grid; gap: 4px; }
   /* Home screen: the next machine turns slowly behind a big Play button. */
-  body.at-home :is(.top, .sub, .bottom, .banner),
-  body:has(#home:not([hidden])) :is(.top, .sub, .bottom, .banner) { display: none; }
+  body.at-home :is(.top, .sub, .bottom, .banner, .ptag),
+  body:has(#home:not([hidden])) :is(.top, .sub, .bottom, .banner, .ptag) { display: none; }
+  body.with-powers .banner { bottom: calc(env(safe-area-inset-bottom, 0px) + 146px); }
   .home-screen {
     position: fixed;
     inset: 0;
@@ -341,7 +384,7 @@
     <div class="paused" id="timerNote" hidden>Starts on first tilt</div>
   </div>
   <div class="right side">
-  <button class="token icon-btn" id="settingsBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M20.30 12.00 L22.55 13.00 L22.13 15.12 L19.67 15.18 L18.90 16.61 L17.87 17.87 L18.76 20.17 L16.96 21.37 L15.18 19.67 L13.62 20.14 L12.00 20.30 L11.00 22.55 L8.88 22.13 L8.82 19.67 L7.39 18.90 L6.13 17.87 L3.83 18.76 L2.63 16.96 L4.33 15.18 L3.86 13.62 L3.70 12.00 L1.45 11.00 L1.87 8.88 L4.33 8.82 L5.10 7.39 L6.13 6.13 L5.24 3.83 L7.04 2.63 L8.82 4.33 L10.38 3.86 L12.00 3.70 L13.00 1.45 L15.12 1.87 L15.18 4.33 L16.61 5.10 L17.87 6.13 L20.17 5.24 L21.37 7.04 L19.67 8.82 L20.14 10.38Z M15.40 12 A3.4 3.4 0 1 0 8.60 12 A3.4 3.4 0 1 0 15.40 12Z"/></svg></button>
+  <button class="token icon-btn" id="settingsBtn" type="button" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.4" fill="currentColor"/></svg></button>
   <span class="pill" id="coinsPill" aria-label="Gold coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#e8b23a"/><circle cx="12" cy="12" r="9" fill="none" stroke="#a8730f" stroke-width="2"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff1c2" stroke-width="1.6" opacity=".85"/></svg><b id="coinsCount">0</b></span>
   </div>
 </header>
@@ -353,6 +396,8 @@
 </div>
 
 <footer class="bottom">
+  <div class="powerbar" id="powerbar" role="toolbar" aria-label="Power-ups" hidden></div>
+  <div class="controls">
   <button class="token round" id="orbitLeft" type="button" aria-label="Turn the view left">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg>
   </button>
@@ -360,7 +405,9 @@
   <button class="token round" id="orbitRight" type="button" aria-label="Turn the view right">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v5h-5"/></svg>
   </button>
+  </div>
 </footer>
+<section class="ptag" id="ptag" hidden aria-live="polite"></section>
 
 <section class="home-screen" id="home" aria-label="Home">
   <div>

@@ -11,87 +11,11 @@
 
 import { LEVELS } from '../prototype/src/levels.js';
 import { buildTrack } from '../prototype/src/track.js';
-import { createSim, stepSim, isWon } from '../prototype/src/sim.js';
-import { createTilt, updateTilt, gravityInMachine, directionVector } from '../prototype/src/tilt.js';
+import { createSim } from '../prototype/src/sim.js';
 import { replay, levelTimes } from '../prototype/src/replay.js';
-import { SIM_DT } from '../prototype/src/config.js';
 
-const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-
-function cloneSim(sim) {
-  return {
-    ...sim,
-    marbles: sim.marbles.map((m) => ({ ...m, pos: [...m.pos], tangent: [...m.tangent] })),
-    goals: sim.goals.map((g) => ({ ...g })),
-    plates: sim.plates.map((p) => ({ ...p })),
-    gates: sim.gates.map((g) => ({ ...g })),
-  };
-}
-
-// A position: where each marble is, to a tenth of a block.
-export const stateKey = (sim) => sim.marbles.map((m) => (m.delivered ? 'D' : `${m.edge}:${Math.round(m.s * 10)}`)).join('|');
-// Everything has stopped: no marble moved more than a hair in the last tenth of a second.
-// (Positions, not speeds: two marbles pressed together in a curve jiggle forever.)
-function settleWatch(sim) {
-  let mark = sim.marbles.map((m) => [...m.pos]);
-  let since = 0;
-  return (dt) => {
-    since += dt;
-    if (since < 0.1) return false;
-    const moved = sim.marbles.some((m, i) => !m.delivered && Math.hypot(m.pos[0] - mark[i][0], m.pos[1] - mark[i][1], m.pos[2] - mark[i][2]) > 0.02);
-    mark = sim.marbles.map((m) => [...m.pos]);
-    since = 0;
-    return !moved;
-  };
-}
-
-// Tilt `dir` until everything stops, then let go until everything stops again.
-// (When everything has already stopped under the tilt, letting go changes nothing, so
-// that part is skipped.)
-export function macro(sim, dir) {
-  const s = cloneSim(sim);
-  const tilt = createTilt();
-  tilt.target = directionVector(dir);
-  tilt.holding = true;
-  let t = 0;
-  let won = false;
-  let calm = false;
-  let settled = settleWatch(s);
-  while (t < 4.5) {
-    updateTilt(tilt, SIM_DT);
-    stepSim(s, SIM_DT, gravityInMachine(tilt.current));
-    t += SIM_DT;
-    if (isWon(s)) {
-      won = true;
-      break;
-    }
-    if (settled(SIM_DT) && t > 0.3) {
-      calm = true;
-      break;
-    }
-  }
-  const hold = t;
-  if (!won && calm) {
-    for (const m of s.marbles) m.v = 0;
-    return { sim: s, won, hold, time: t };
-  }
-  if (!won) {
-    tilt.target = [0, 0];
-    tilt.holding = false;
-    settled = settleWatch(s);
-    while (t - hold < 3) {
-      updateTilt(tilt, SIM_DT);
-      stepSim(s, SIM_DT, gravityInMachine(tilt.current));
-      t += SIM_DT;
-      if (isWon(s)) {
-        won = true;
-        break;
-      }
-      if (settled(SIM_DT) && Math.hypot(...tilt.current) < 0.005) break;
-    }
-  }
-  return { sim: s, won, hold, time: t };
-}
+export { DIRS, cloneSim, stateKey, macro } from '../prototype/src/moves.js';
+import { DIRS, stateKey, macro } from '../prototype/src/moves.js';
 
 // Plays a list of moves (each held until everything stops) and says whether it wins.
 export function playMoves(sim, dirs) {

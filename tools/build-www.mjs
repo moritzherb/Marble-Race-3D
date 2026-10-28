@@ -1,5 +1,6 @@
 // Builds www/, the web content of the Android and iOS apps (Capacitor copies it into each
-// native project on `npx cap sync`). It is the prototype with two changes:
+// native project on `npx cap sync`). It is the prototype (scripts, ad settings and the hint
+// tables) with two changes:
 //   - three.js is copied in from node_modules instead of loaded from a CDN, so the game
 //     works without a connection;
 //   - Capacitor's runtime (capacitor.js) loads before the game, which connects the native
@@ -23,6 +24,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'src', 'vendor'), { recursive: true });
 cpSync(join(src, 'src'), join(out, 'src'), { recursive: true });
 cpSync(join(src, 'ads-config.json'), join(out, 'ads-config.json'));
+cpSync(join(src, 'hints'), join(out, 'hints'), { recursive: true });
 cpSync(need(join(root, 'node_modules/three/build/three.module.js'), 'three'), join(out, 'src/vendor/three.module.js'));
 cpSync(need(join(root, 'node_modules/@capacitor/core/dist/capacitor.js'), '@capacitor/core'), join(out, 'capacitor.js'));
 
