@@ -28,7 +28,8 @@ function cloneSim(sim) {
   };
 }
 
-const stateKey = (sim) => sim.marbles.map((m) => (m.delivered ? 'D' : `${m.edge}:${Math.round(m.s * 10)}`)).join('|');
+// A position: where each marble is, to a tenth of a block.
+export const stateKey = (sim) => sim.marbles.map((m) => (m.delivered ? 'D' : `${m.edge}:${Math.round(m.s * 10)}`)).join('|');
 // Everything has stopped: no marble moved more than a hair in the last tenth of a second.
 // (Positions, not speeds: two marbles pressed together in a curve jiggle forever.)
 function settleWatch(sim) {
@@ -45,6 +46,8 @@ function settleWatch(sim) {
 }
 
 // Tilt `dir` until everything stops, then let go until everything stops again.
+// (When everything has already stopped under the tilt, letting go changes nothing, so
+// that part is skipped.)
 export function macro(sim, dir) {
   const s = cloneSim(sim);
   const tilt = createTilt();
@@ -52,6 +55,7 @@ export function macro(sim, dir) {
   tilt.holding = true;
   let t = 0;
   let won = false;
+  let calm = false;
   let settled = settleWatch(s);
   while (t < 4.5) {
     updateTilt(tilt, SIM_DT);
@@ -61,9 +65,16 @@ export function macro(sim, dir) {
       won = true;
       break;
     }
-    if (settled(SIM_DT) && t > 0.3) break;
+    if (settled(SIM_DT) && t > 0.3) {
+      calm = true;
+      break;
+    }
   }
   const hold = t;
+  if (!won && calm) {
+    for (const m of s.marbles) m.v = 0;
+    return { sim: s, won, hold, time: t };
+  }
   if (!won) {
     tilt.target = [0, 0];
     tilt.holding = false;
@@ -80,6 +91,42 @@ export function macro(sim, dir) {
     }
   }
   return { sim: s, won, hold, time: t };
+}
+
+// Plays a list of moves (each held until everything stops) and says whether it wins.
+export function playMoves(sim, dirs) {
+  let s = sim;
+  for (const dir of dirs) {
+    const r = macro(s, dir);
+    if (r.won) return true;
+    s = r.sim;
+  }
+  return false;
+}
+
+// What a lock does for a level: compare the level with that lock jammed open.
+//   'costs'     jammed open, the level takes fewer moves
+//   'reroutes'  same number of moves, but every shortcut it allows fails with the lock working
+//   'blocks'    some of those shortcuts fail with the lock working
+//   'useless'   every shortest solution of the jammed level works anyway
+export function lockEffect(realSim, jammedSim, moves, maxStates = 4000) {
+  const jammed = solve(jammedSim, moves, 30, maxStates);
+  if (!jammed.wins.length) return jammed.explored > maxStates ? 'unknown' : 'costs';
+  if (jammed.wins[0].length < moves) return 'costs';
+  const fails = jammed.wins.filter((w) => !playMoves(realSim, w.map((s) => s.dir))).length;
+  return fails === jammed.wins.length ? 'reroutes' : fails > 0 ? 'blocks' : 'useless';
+}
+
+// A solution a person can actually repeat: it still wins when every tilt is held a bit
+// longer than needed and the pauses between tilts vary, the way people play.
+export function isRobust(level, path, tries = 6) {
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let t = 0; t < tries; t++) {
+    const run = path.flatMap((s) => [[s.dir, Math.round((s.hold + 0.3 + 0.9 * rand()) * 10) / 10], ['-', Math.round((0.5 + 0.7 * rand()) * 10) / 10]]);
+    if (!replay(level, run, { maxTime: 90 }).won) return false;
+  }
+  return true;
 }
 
 // Breadth-first search over moves. Returns every shortest winning path (up to a cap)

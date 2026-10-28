@@ -118,6 +118,29 @@ function plateTexture(link) {
   return tex;
 }
 
+// Red and white warning stripes for shutters, the gates that shut when their link is powered.
+function shutterTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fbf6ee';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#e0311f';
+  for (let k = -64; k < 128; k += 32) {
+    g.beginPath();
+    g.moveTo(k, 0);
+    g.lineTo(k + 16, 0);
+    g.lineTo(k + 16 - 64, 64);
+    g.lineTo(k - 64, 64);
+    g.closePath();
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
 // A soft studio environment for reflections on the glass marbles.
 function studioEnvironment(renderer) {
   const scene = new THREE.Scene();
@@ -400,6 +423,8 @@ export function createView(canvas) {
   postGeo.translate(0, POST_HEIGHT / 2, 0);
   const knobGeo = new THREE.SphereGeometry(0.05, 14, 10);
   const beadGeo = new THREE.SphereGeometry(0.03, 10, 8);
+  const shutterTex = shutterTexture();
+  const shutterRed = new THREE.MeshStandardMaterial({ color: 0xd8352a, roughness: 0.5 });
   const shared = new Set([cubeGeo, archGeo, archUnderCarvedGeo, liningGeo, shadeGeo, marbleGeo, postGeo, knobGeo, beadGeo]);
 
   let pivot = null; // tilts around the machine's centre
@@ -479,7 +504,7 @@ export function createView(canvas) {
   }
 
   // A brass post standing on the block top beside a groove, on the side facing `towards`.
-  function addPost(surface, tangent, towards, color) {
+  function addPost(surface, tangent, towards, color, knobColor = color) {
     const side = new THREE.Vector3(-tangent[2], 0, tangent[0]).normalize();
     const a = surface.clone().addScaledVector(side, POST_OFFSET);
     const b = surface.clone().addScaledVector(side, -POST_OFFSET);
@@ -488,7 +513,7 @@ export function createView(canvas) {
     const post = new THREE.Mesh(postGeo, mat);
     post.position.copy(base);
     post.castShadow = true;
-    const knob = new THREE.Mesh(knobGeo, mat);
+    const knob = new THREE.Mesh(knobGeo, knobColor === color ? mat : new THREE.MeshStandardMaterial({ color: knobColor, roughness: 0.4 }));
     knob.position.copy(base).setY(base.y + POST_HEIGHT);
     knob.castShadow = true;
     content.add(post, knob);
@@ -560,21 +585,46 @@ export function createView(canvas) {
     });
 
     // Gates: a metal slab across the groove that sinks into the wood when open.
+    // Shutters are striped red and white; open, they sink only to the groove floor, so the
+    // stripe across the groove still shows where one will rise.
     const gates = track.gates.map((gate) => {
       const edge = track.edges[gate.edge];
       const { pos, tangent } = sampleEdge(edge, gate.s);
-      const mat = new THREE.MeshStandardMaterial({ color: LINK_COLORS[gate.link], metalness: 0.8, roughness: 0.32 });
+      const frameMat = gate.inverse ? new THREE.MeshStandardMaterial({ map: shutterTex, roughness: 0.45 }) : null;
+      const mat = gate.inverse
+        ? frameMat
+        : new THREE.MeshStandardMaterial({ color: LINK_COLORS[gate.link], metalness: 0.8, roughness: 0.32 });
       // Closed, the slab fills the groove from its floor to well above the block top.
       const top = pos[1] + RAIL_TO_TOP;
       const bottom = pos[1] + FLOOR - 0.01;
       const height = top + 0.28 - bottom;
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(0.06, height, 2 * CHANNEL_HALF + 0.03), mat);
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(gate.inverse ? 0.09 : 0.06, height, 2 * CHANNEL_HALF + 0.03), mat);
       slab.rotation.y = Math.atan2(-tangent[2], tangent[0]);
       const closedY = bottom + height / 2;
-      slab.position.set(pos[0], closedY, pos[2]);
+      const openY = gate.inverse ? pos[1] + FLOOR + 0.02 - height / 2 : closedY - height - 0.02;
+      const startY = gate.inverse ? openY : closedY;
+      slab.position.set(pos[0], startY, pos[2]);
       slab.castShadow = true;
       content.add(slab);
-      return { slab, closedY, openY: closedY - height - 0.02, y: closedY, surface: new THREE.Vector3(pos[0], top, pos[2]), tangent };
+      if (gate.inverse) {
+        // A striped frame over the groove, like a level crossing, so a shutter is easy to
+        // spot while it is open.
+        const side = new THREE.Vector3(-tangent[2], 0, tangent[0]).normalize();
+        const frameH = 0.42;
+        for (const k of [1, -1]) {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, frameH, 0.08), shutterRed);
+          post.position.set(pos[0], top + frameH / 2, pos[2]).addScaledVector(side, k * (CHANNEL_HALF + 0.07));
+          post.rotation.y = slab.rotation.y;
+          post.castShadow = true;
+          content.add(post);
+        }
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.07, 2 * CHANNEL_HALF + 0.22), frameMat);
+        bar.position.set(pos[0], top + frameH, pos[2]);
+        bar.rotation.y = slab.rotation.y;
+        bar.castShadow = true;
+        content.add(bar);
+      }
+      return { slab, closedY, openY, y: startY, surface: new THREE.Vector3(pos[0], top, pos[2]), tangent };
     });
 
     // Cables: each plate (or banded goal) and its gate get a brass post beside the groove,
@@ -588,7 +638,7 @@ export function createView(canvas) {
       if (!sources.length) return;
       const color = LINK_COLORS[gate.link];
       const towards = sources.reduce((acc, s) => acc.add(s.surface), new THREE.Vector3()).multiplyScalar(1 / sources.length);
-      const gatePost = addPost(gates[gi].surface, gates[gi].tangent, towards, color);
+      const gatePost = addPost(gates[gi].surface, gates[gi].tangent, towards, color, gate.inverse ? 0xd23b2a : color);
       for (const src of sources) {
         const srcPost = addPost(src.surface, src.tangent, gatePost.top, color);
         const a = srcPost.top;
@@ -606,7 +656,7 @@ export function createView(canvas) {
           content.add(bead);
           return bead;
         });
-        cables.push({ gate: gi, curve, mat, beads, posts: [srcPost.mat, gatePost.mat] });
+        cables.push({ gate: gi, inverse: gate.inverse, curve, mat, beads, posts: [srcPost.mat, gatePost.mat] });
       }
     });
 
@@ -745,13 +795,15 @@ export function createView(canvas) {
       vis.slab.position.y = vis.y;
     });
     for (const c of current.cables) {
-      const open = sim.gates[c.gate].open;
-      const glow = open ? 0.55 : 0;
+      // The cable lights up while its plate or goal is powering it: that opens a gate
+      // and shuts a shutter.
+      const powered = sim.gates[c.gate].open !== c.inverse;
+      const glow = powered ? 0.55 : 0;
       c.mat.emissiveIntensity += (glow - c.mat.emissiveIntensity) * ease(8);
       for (const m of c.posts) m.emissiveIntensity = c.mat.emissiveIntensity * 0.6;
       c.beads.forEach((bead, k) => {
-        bead.visible = open;
-        if (open) bead.position.copy(c.curve.getPointAt((clock * 0.45 + k / 3) % 1));
+        bead.visible = powered;
+        if (powered) bead.position.copy(c.curve.getPointAt((clock * 0.45 + k / 3) % 1));
       });
     }
   }

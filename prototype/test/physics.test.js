@@ -134,6 +134,47 @@ test('a marble resting on the plate holds the gate open', () => {
   assert.ok(run.events.some((e) => e.type === 'gateOpen'));
 });
 
+// The same machine with a shutter instead of a gate: it is open until red presses the plate.
+const shuttered = {
+  ...gated,
+  pieces: gated.pieces.map((p) => (p[0] === 'gate' ? ['gate', 0, 0, 1, 1, { link: 'A', inverse: true }] : p)),
+};
+
+test('a shutter is open while its plate is empty', () => {
+  assert.deepEqual(buildTrack(shuttered).errors, []);
+  const run = replay(shuttered, [['S', 2]], { maxTime: 2 });
+  assert.equal(run.sim.marbles[0].delivered, true);
+});
+
+test('a shutter closes while its plate is pressed', () => {
+  const run = replay(shuttered, [['E', 1], ['S', 2]], { maxTime: 3 });
+  assert.equal(run.sim.marbles[0].delivered, false);
+  assert.ok(run.events.some((e) => e.type === 'gateClose'));
+  assert.ok(run.sim.marbles[0].pos[2] < 1.5, 'blue should wait north of the shutter');
+});
+
+test('wood over anything but a straight groove is reported, so every tunnel is visible', () => {
+  const level = {
+    marbles: [{ color: 'blue', at: [0, 0, 0] }],
+    pieces: [
+      ['end', 0, 0, 0, 2],
+      ['curve', 1, 0, 0, 3],
+      ['goal', 1, 0, 1, 1, { color: 'blue' }],
+    ],
+    blocks: [[1, 1, 0]],
+  };
+  assert.match(buildTrack(level).errors.join(' '), /covers the curve/);
+  const tunnel = {
+    ...level,
+    pieces: [
+      ['end', 0, 0, 0, 2],
+      ['straight', 1, 0, 0],
+      ['goal', 2, 0, 0, 0, { color: 'blue' }],
+    ],
+  };
+  assert.deepEqual(buildTrack(tunnel).errors, []);
+});
+
 test('marbles in one groove cannot pass through each other', () => {
   const level = {
     marbles: [

@@ -27,9 +27,10 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 3. **T-junction:** the marble takes the most downhill branch. A turn wins a tie, so a diagonal tilt means "take this turn". With no branch downhill it keeps going straight; with no straight option it bumps to a stop. The junction is an open square, so a marble resting in it rolls into any branch that is clearly downhill, even if its own groove runs across the tilt.
 4. **Crossing:** marbles go straight through.
 5. **Plate and gate:** a marble resting on the plate keeps the linked gate open.
-6. **Goal:** the matching colour locks in. A wrong colour bounces back, which costs time but does not fail the level. A goal with a metal band also acts as a plate, which gives you delivery order.
-7. **Traffic:** marbles block each other in a groove.
-8. **Fail:** the clock reaches zero. (Falling off open edges is not in the prototype.)
+6. **Shutter:** the opposite of a gate. It stands open until its link is powered (a plate pressed or a banded goal filled) and shuts while it is. One plate can open a gate and shut a shutter at the same time.
+7. **Goal:** the matching colour locks in. A wrong colour bounces back, which costs time but does not fail the level. A goal with a metal band also acts as a plate, which gives you delivery order.
+8. **Traffic:** marbles block each other in a groove.
+9. **Fail:** the clock reaches zero. (Falling off open edges is not in the prototype.)
 
 ## Controls
 
@@ -53,16 +54,18 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 - **Grooves:** carved into the block tops as a smooth U-shaped channel about a third of the block wide, darker where deeper. Marbles rest on the channel floor, so they visibly roll in the groove. Goals and plates sit in round cups.
 - **Marbles:** glossy, with a pale band so rolling is visible. Marbles inside tunnels show as coloured outlines through the wood.
 - **Junctions:** where grooves meet (T-junctions, crossings), the channels merge into one carved floor. Dead ends are rounded.
-- **Tunnels:** a block sitting on a straight groove gets an arched tunnel through its base, with a dark inside, so the marble rolls into a visible opening.
-- **Mechanisms:** goals are a coloured ring and inlay. Plates and gates are metal (brass for link A, graphite for link B). A cable is strung between two posts, one beside each plate (or banded goal) and one beside the gate it opens. When the gate is open, the cable glows and beads run along it towards the gate.
+- **Tunnels:** a block sitting on a straight groove gets an arched tunnel through its base, with a dark inside, so the marble rolls into a visible opening. Only straight grooves can run under wood: the level check rejects wood over a curve, junction, dead end or ramp, because a marble there would disappear into solid wood with no opening to show where it went.
+- **Mechanisms:** goals are a coloured ring and inlay. Plates and gates are metal (brass for link A, graphite for link B, silver for link C). Shutters are striped red and white and sit in a red frame, so they read as "the other way round" even while open. A cable is strung between two posts, one beside each plate (or banded goal) and one beside the gate it opens. When the gate is open, the cable glows and beads run along it towards the gate.
 - **Background:** teal backdrop. HUD in pale maple, with Arimo throughout.
 
 ## Flow
 
 - **Home screen:** the app opens here. The next unfinished level turns slowly behind a central Play button, with your progress at the top and Levels and Settings below.
 - **Settings:** three round toggles (Sound, Vibration, Hints) and How to play. Vibration only appears where the browser supports it, so not on iPhone. Testing options sit behind a small "Playtest tools" link.
-- **Progression:** 50 levels in five chapters (first machines, sidings and spirals, counterweights, in order, grand machines) that unlock in order; finishing one opens the next. The level list shows locked levels.
-- **Difficulty:** measured by the fewest moves the solver needs (one tilt held until everything stops) and by how many opening moves lose the level. It climbs from 1–3 moves early to 6–7 moves with several losing openings at the end. See [levels.md](levels.md).
+- **Progression:** 100 levels in ten chapters that unlock in order; finishing one opens the next. The level list shows locked levels. New mechanics get a level of their own before they're combined: shutters (Level Crossing), the third link (Silver Key), the fifth marble (Grand Machine) and finally two machines linked into one.
+- **Difficulty:** levels are ordered by a score built from the fewest moves the solver needs (one tilt held until everything stops), how many opening moves lose the level, how much of the position space is a dead end, and how few different shortest solutions there are. It climbs from 2–3 moves early to 13–15 moves at the end, and the time factor tightens from 3.0 to about 2.0 along the way. See [levels.md](levels.md).
+- **Every lock has a purpose:** the audit jams each gate (or shutter) open and re-solves. A level only ships if that makes it shorter or breaks every shortest solution; a gate you can ignore is cut. Nothing may go unused either: every gate, plate and goal is reached by the reference run or by a designed trap.
+- **Fair for people, not just the solver:** each reference solution must still win when every hold and pause is made longer and sloppier (six randomised replays), so no level depends on frame-perfect timing.
 - **For testers:** Settings → Playtest tools → Reset progress locks everything again for the next person. The level list lives there too, since players just play the next level.
 
 ## Biggest risk, and the first test

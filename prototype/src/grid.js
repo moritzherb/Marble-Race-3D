@@ -7,9 +7,11 @@
 //   ┬ ┴ ├ ┤             T-junction
 //   ┼                   crossing
 //   ╴ ╵ ╶ ╷             dead end, open on the side its stub points to
+//   *                   dead end, open towards whichever groove leads into it
 //   b o g p r           goal for the blue, orange, green, purple or red marble
 //   A B C               weight plate for link A, B or C
 //   1 2 3               gate opened by link A, B or C
+//   x y z               shutter for link A, B or C: open until that link is powered, then shut
 //   > < v ^             ramp, drawn on both of its cells on the lower tier, pointing downhill
 //   ~                   a cell taken by a ramp coming up from the tier below
 //   #                   plain block
@@ -40,7 +42,8 @@ const GROOVES = {
 };
 const GOALS = { b: 'blue', o: 'orange', g: 'green', p: 'purple', r: 'red' };
 const PLATES = { A: 'A', B: 'B', C: 'C' };
-const GATES = { 1: 'A', 2: 'B', 3: 'C' };
+const GATES = { 1: 'A', 2: 'B', 3: 'C', x: 'A', y: 'B', z: 'C' };
+const SHUTTERS = new Set(['x', 'y', 'z']);
 const RAMPS = { '>': ['E', 0], 'v': ['S', 1], '<': ['W', 2], '^': ['N', 3] };
 const DEAD_END_ROTATION = { W: 0, N: 1, E: 2, S: 3 };
 
@@ -115,12 +118,14 @@ export function compileMap(level) {
         if (GATES[ch]) {
           const axis = gateAxis(x, y, z);
           if (!axis) errors.push(`Gate ${here} has no groove leading into it`);
-          return pieces.push(['gate', x, y, z, axis === 'ns' ? 1 : 0, { link: GATES[ch] }]);
+          const opts = SHUTTERS.has(ch) ? { link: GATES[ch], inverse: true } : { link: GATES[ch] };
+          return pieces.push(['gate', x, y, z, axis === 'ns' ? 1 : 0, opts]);
         }
-        if (GOALS[ch] || PLATES[ch]) {
+        if (GOALS[ch] || PLATES[ch] || ch === '*') {
           const sides = sidesInto(x, y, z);
-          if (sides.length !== 1) errors.push(`${GOALS[ch] ? 'Goal' : 'Plate'} ${here} needs exactly one groove leading in, found ${sides.length}`);
+          if (sides.length !== 1) errors.push(`${GOALS[ch] ? 'Goal' : PLATES[ch] ? 'Plate' : 'Dead end'} ${here} needs exactly one groove leading in, found ${sides.length}`);
           const r = DEAD_END_ROTATION[sides[0]] ?? 0;
+          if (ch === '*') return pieces.push(['end', x, y, z, r]);
           if (PLATES[ch]) return pieces.push(['plate', x, y, z, r, { link: PLATES[ch] }]);
           const color = GOALS[ch];
           const band = level.bands?.[color];

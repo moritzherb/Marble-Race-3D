@@ -119,6 +119,21 @@ export function buildTrack(level) {
     }
   }
 
+  // Wood on top of a groove hides the marble, so it must be a tunnel the player can see.
+  // The renderer can only cut an arch through a block over a straight groove, so that is
+  // the only groove anything may sit on (and a ramp can't be the thing on top).
+  for (const piece of placed) {
+    const def = PIECES[piece.type];
+    if (!def.rails.length) continue;
+    const surface = piece.type === 'ramp' ? pieceCells(piece.type, piece.anchor, piece.r).filter(([, y]) => y > piece.anchor[1]) : [piece.anchor];
+    for (const [x, y, z] of surface) {
+      const above = occupied.get(cellKey([x, y + 1, z]));
+      if (!above || above === piece) continue;
+      if (piece.type === 'straight' && above.type !== 'ramp') continue;
+      errors.push(`${above.label} covers the ${piece.type} at ${x},${y},${z}; only a straight groove can run under wood (as a tunnel)`);
+    }
+  }
+
   // The machine tilts as one object, so every block must touch the rest.
   const parts = countParts(occupied);
   if (parts > 1) errors.push(`The machine is in ${parts} separate parts; add blocks to join them`);
@@ -176,7 +191,8 @@ export function buildTrack(level) {
     } else if (feature.type === 'plate') {
       plates.push({ edge: edge.id, from: edge.L - 0.3, link, pressed: false, piece: piece.index });
     } else if (feature.type === 'gate') {
-      gates.push({ edge: edge.id, s: edge.L / 2, link, open: false, piece: piece.index });
+      // A shutter (inverse gate) is the other way round: open until its link is powered.
+      gates.push({ edge: edge.id, s: edge.L / 2, link, inverse: Boolean(piece.opts.inverse), open: false, piece: piece.index });
     }
   }
   for (const gate of gates) {

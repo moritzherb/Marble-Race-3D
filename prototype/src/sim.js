@@ -265,9 +265,10 @@ function updateMechanisms(sim, events) {
   }
   for (const gate of sim.gates) {
     const was = gate.open;
-    gate.open =
+    const powered =
       sim.plates.some((p) => p.link === gate.link && p.pressed) ||
       sim.goals.some((g) => g.link === gate.link && g.filled);
+    gate.open = gate.inverse ? !powered : powered;
     if (gate.open !== was) events.push({ type: gate.open ? 'gateOpen' : 'gateClose', link: gate.link });
     if (!gate.open) {
       // A gate closing on a marble pushes it out to whichever side it is on.

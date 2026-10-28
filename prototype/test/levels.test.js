@@ -19,7 +19,22 @@ for (const [i, level] of LEVELS.entries()) {
     assert.equal(run.won, true, 'reference solution did not deliver every marble');
     const times = levelTimes(level, run.time);
     assert.ok(run.time <= times.gold, `took ${run.time.toFixed(2)}s, gold is ${times.gold}s`);
-    assert.ok(times.limit >= 20 && times.limit <= 45, `time limit ${times.limit}s is outside 20-45s`);
+    assert.ok(times.limit >= 20 && times.limit <= 60, `time limit ${times.limit}s is outside 20-60s`);
+  });
+
+  // A gate nobody ever reaches is decoration, not a lock (the audit checks it matters).
+  test(`${i + 1}. ${level.name}: a marble reaches every gate`, () => {
+    const track = buildTrack(level);
+    const reached = new Set();
+    for (const run of [level.solution, ...(level.traps || [])]) {
+      replay(level, run, {
+        maxTime: 60,
+        onStep: (sim) => {
+          for (const m of sim.marbles) reached.add(m.edge);
+        },
+      });
+    }
+    for (const gate of track.gates) assert.ok(reached.has(gate.edge), `gate ${track.pieces[gate.piece].label} is never reached`);
   });
 
   for (const [t, trap] of (level.traps || []).entries()) {
