@@ -57,9 +57,11 @@ async function startAds() {
   await ads.attach(admobProvider(config), config);
 }
 
-// Lives (and later coins): see player.js and docs/economy.md.
-const player = createPlayer();
+// Lives and gold coins: see player.js and docs/economy.md. Levels finished before coins
+// existed count as already paid.
+const player = createPlayer({ legacyPaid: () => Object.fromEntries(Object.entries(loadProgress()).map(([id, p]) => [id, Math.min(3, Math.max(1, p.stars || 1))])) });
 const HEART = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.2s-7.6-4.7-9.7-9.4C.8 8.3 2.9 4.4 6.7 4.4c2.1 0 3.6 1.2 5.3 3.3 1.7-2.1 3.2-3.3 5.3-3.3 3.8 0 5.9 3.9 4.4 7.4-2.1 4.7-9.7 9.4-9.7 9.4z"/></svg>';
+const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#e8b23a"/><circle cx="12" cy="12" r="9" fill="none" stroke="#a8730f" stroke-width="2"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff1c2" stroke-width="1.6" opacity=".85"/></svg>';
 const livesLine = ({ lives, max, nextIn }) => (nextIn === null ? `${lives}/${max} · Full` : `${lives}/${max} · Next life in ${clockText(nextIn)}`);
 
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
@@ -166,15 +168,18 @@ function win() {
   const t = game.elapsed;
   const stars = t <= game.times.gold ? 3 : t <= game.times.par ? 2 : 1;
   const demo = Boolean(game.autoplay);
+  let reward = null;
   if (!demo) {
     recordResult(game.level.id, stars, t);
     logAttempt('won', stars);
     ads.levelCompleted(game.index + 1);
+    reward = player.grantLevel(game.level.id, game.index, stars);
+    updateLives();
   }
   audio.playEvent({ type: 'win' });
   const attempt = game.sim;
   setTimeout(() => {
-    if (game.phase === 'won' && game.sim === attempt) openCard('win', { stars, t, demo });
+    if (game.phase === 'won' && game.sim === attempt) openCard('win', { stars, t, demo, reward });
   }, 450);
 }
 
@@ -243,8 +248,36 @@ function lossNote() {
   return `<p class="note">Trying again or going home costs 1 life: you'll have ${lives - 1} of ${ECONOMY.lives.max}.${first ? ` Lives come back one every ${ECONOMY.lives.regenMinutes} minutes, even with the game closed.` : ''}</p>`;
 }
 
+// "Buy a life · 150" on the lives cards, or why it can't be bought.
+function buyLifeButton(info) {
+  if (info.lives >= info.max) return '';
+  const price = ECONOMY.prices.life;
+  const coins = player.coins();
+  const short = coins < price;
+  return `<button class="btn wide${short ? '' : ' primary'}" data-act="buyLife" type="button"${short ? ' disabled' : ''}>Buy a life <span class="cost">· ${price} ${COIN}</span></button>
+    ${short ? `<p class="fine">You have ${coins} ${COIN}. Finish levels to earn more.</p>` : ''}`;
+}
+
+// The coins a win paid, on the Level complete card.
+function rewardBlock(reward) {
+  if (!reward) return '';
+  if (!reward.total) {
+    const left = player.remaining(game.level.id, game.index);
+    return `<p class="fine">${left ? `Replays pay only for new stars: +${left} ${COIN} still to earn here.` : 'You have earned everything this level pays.'}</p>`;
+  }
+  const first = !player.seen('coins');
+  if (first) player.markSeen('coins');
+  return `<div class="reward"><span class="sum">+${reward.total} ${COIN}</span>
+    <small>${reward.parts.map((p) => `${p.why} +${p.amount}`).join(' · ')}</small>
+    ${first ? '<small>Gold coins buy lives, second chances and power-ups. Each level pays once, plus a bonus for 2 and 3 stars.</small>' : ''}</div>`;
+}
+
 function updateLives() {
   const info = player.lives();
+  const coins = player.coins();
+  $('coinsCount').textContent = coins;
+  $('homeCoinsText').textContent = coins;
+  $('homeCoins').setAttribute('aria-label', `${coins} gold coins`);
   $('livesCount').textContent = info.lives;
   $('homeLivesText').textContent = livesLine(info);
   $('homeLives').setAttribute('aria-label', `Lives: ${livesLine(info)}`);
@@ -300,6 +333,7 @@ $('homeLevels').addEventListener('click', () => openCard('levels', { from: 'home
 $('homeSettings').addEventListener('click', () => openCard('settings'));
 $('homeBtn').addEventListener('click', () => !game.adShowing && requestGiveUp('leave', showHome));
 $('homeLives').addEventListener('click', () => openCard('lives'));
+$('homeCoins').addEventListener('click', () => openCard('coins'));
 $('settingsBtn').addEventListener('click', () => openCard('settings'));
 $('restartBtn').addEventListener('click', () => {
   if (game.adShowing) return;
@@ -448,7 +482,7 @@ const LOCK =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
 
 // Cards opened from a menu pause the game; win and time-up cards don't need to.
-const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools', 'giveUp', 'lives', 'noLives', 'notice']);
+const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools', 'giveUp', 'lives', 'noLives', 'notice', 'coins']);
 const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator;
 
 function openCard(kind, data = {}) {
@@ -523,6 +557,20 @@ const ACTIONS = {
   levelsBack: () => (game.levelsFrom === 'tools' ? openCard('tools') : closeCard()),
   pick: (el) => requestGiveUp('leave', () => play(Number(el.dataset.i))),
   solution: () => requestGiveUp('leave', watchSolution),
+  buyLife: (el) => {
+    if (el.disabled) return;
+    el.disabled = true;
+    const r = player.buyLife();
+    updateLives();
+    if (r.ok) audio.playEvent({ type: 'deliver' });
+    // Back to wherever the card was opened from, now with the new life.
+    openCard(game.card === 'noLives' && player.lives().lives > 0 ? 'lives' : game.card);
+  },
+  coinsPlus: () => {
+    player.addCoins(500);
+    updateLives();
+    openCard('tools');
+  },
   lifeMinus: () => {
     player.setLives(player.lives().lives - 1);
     openCard('tools');
@@ -580,11 +628,12 @@ const ACTIONS = {
 };
 
 const CARDS = {
-  win: ({ stars, t, demo }) => `
+  win: ({ stars, t, demo, reward }) => `
     <h2>${demo ? 'Reference solution' : 'Level complete'}</h2>
     <div class="stars" aria-label="${stars} of 3 stars">${[1, 2, 3].map((i) => STAR(i <= stars)).join('')}</div>
     <div class="result-time">${t.toFixed(1)} s</div>
     <div class="targets">3 stars under ${game.times.gold} s · 2 stars under ${game.times.par} s</div>
+    ${rewardBlock(reward)}
     <div class="row">
       <button class="btn" data-act="retry" type="button">Play again</button>
       <button class="btn primary" data-act="next" type="button">${isLast() ? 'Home' : 'Next level'}</button>
@@ -627,6 +676,7 @@ const CARDS = {
       <li>A life comes back every ${ECONOMY.lives.regenMinutes} minutes, up to ${info.max}, even with the game closed.</li>
       <li>Levels 1–${ECONOMY.lives.freeLevels} never cost a life.</li>
     </ul>
+    ${buyLifeButton(info)}
     <button class="btn primary wide" data-act="livesBack" type="button">OK</button>`;
   },
   noLives: () => {
@@ -636,8 +686,20 @@ const CARDS = {
     <div class="big-stat">${HEART}<span>${info.lives}/${info.max}</span></div>
     <p class="countdown" id="livesTimer">${info.nextIn === null ? 'Full' : `Next life in ${clockText(info.nextIn)}`}</p>
     <p>A life comes back every ${ECONOMY.lives.regenMinutes} minutes, even with the game closed. Levels 1–${ECONOMY.lives.freeLevels} are free to replay meanwhile.</p>
-    <div class="row"><button class="btn primary" data-act="livesBack" type="button">Wait</button></div>`;
+    ${buyLifeButton(info)}
+    <div class="row"><button class="btn" data-act="livesBack" type="button">Wait</button></div>`;
   },
+  coins: () => `
+    <div class="card-head"><h2>Gold coins</h2>
+      <button class="close-btn" data-act="close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button></div>
+    <div class="big-stat">${COIN}<span>${player.coins()}</span></div>
+    <ul class="howto">
+      <li>Finishing a level for the first time pays coins: more for later levels.</li>
+      <li>Reaching 2 stars and 3 stars on a level pays a bonus, once each.</li>
+      <li>Spend them on lives (${ECONOMY.prices.life}), on a second chance when time runs out (${ECONOMY.secondChance.cost}), and on power-ups from level ${ECONOMY.powerUps.unlockLevel}.</li>
+      <li>Gold coins are earned by playing. They can't be bought.</li>
+    </ul>
+    <button class="btn primary wide" data-act="close" type="button">OK</button>`,
   notice: ({ title, text }) => `
     <h2>${title}</h2>
     <p>${text}</p>
@@ -656,9 +718,11 @@ const CARDS = {
             <span class="n">${i + 1}</span><span class="name">${l.name}</span><span class="lock">${LOCK} Locked</span></button>`;
         }
         const current = game.screen === 'game' && i === game.index;
+        const left = player.remaining(l.id, i);
         return `<button type="button" data-act="pick" data-i="${i}" class="${current ? 'current' : ''}">
           <span class="n">${i + 1}</span><span class="name">${l.name}</span>
-          <span class="got">${p ? '★'.repeat(p.stars) + '☆'.repeat(3 - p.stars) : '☆☆☆'}</span></button>`;
+          <span class="got">${p ? '★'.repeat(p.stars) + '☆'.repeat(3 - p.stars) : '☆☆☆'}</span>
+          ${left ? `<span class="earn" aria-label="${left} coins to earn">+${left} ${COIN}</span>` : ''}</button>`;
       }).join('')}
     </div>
     <div class="row"><button class="btn" data-act="levelsBack" type="button">Back</button></div>`;
@@ -708,6 +772,8 @@ const CARDS = {
       <button class="btn small" data-act="lifeSkip" type="button">Skip ${ECONOMY.lives.regenMinutes} min</button>
       <button class="btn small" data-act="lifeFill" type="button">Fill</button>
       <button class="btn small" data-act="resetEconomy" type="button">Reset</button></span></div>
+    <div class="setting"><label>Gold coins<small>${player.coins()}</small></label>
+      <span class="row"><button class="btn small" data-act="coinsPlus" type="button">+500</button></span></div>
     <div class="setting"><label>Ads<small>${adStatus()}</small></label></div>
     <div class="setting"><label>Progress<small>Locks every level but the first again, for the next tester</small></label>
       <span class="row"><button class="btn small" data-act="levels" type="button">Levels</button>

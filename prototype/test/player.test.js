@@ -187,3 +187,99 @@ test('clock text', () => {
   assert.equal(clockText(500), '00:01');
   assert.equal(clockText(-5), '00:00');
 });
+
+// ---------- Gold coins ----------
+
+test('a new player starts with 200 coins', () => {
+  assert.equal(setup().player.coins(), 200);
+});
+
+test('level rewards: base by chapter, half the base again for 2 and for 3 stars', () => {
+  const { player } = setup();
+  assert.deepEqual(player.rewardFor(0), { base: 20, two: 10, three: 10, total: 40 });
+  assert.deepEqual(player.rewardFor(19), { base: 30, two: 15, three: 15, total: 60 });
+  assert.deepEqual(player.rewardFor(99), { base: 70, two: 35, three: 35, total: 140 });
+  let sum = 0;
+  for (let i = 0; i < 100; i++) sum += player.rewardFor(i).total;
+  assert.equal(sum, 9600);
+});
+
+test('a completion pays once; better stars later pay only the difference; replays pay nothing', () => {
+  const { player } = setup();
+  assert.deepEqual(player.grantLevel('lvl', 10, 1), { total: 30, parts: [{ amount: 30, why: 'Completed' }], coins: 230 });
+  assert.equal(player.grantLevel('lvl', 10, 1).total, 0); // replay, or the same event twice
+  assert.deepEqual(player.grantLevel('lvl', 10, 3).parts, [{ amount: 15, why: '2 stars' }, { amount: 15, why: '3 stars' }]);
+  assert.equal(player.grantLevel('lvl', 10, 3).total, 0);
+  assert.equal(player.coins(), 260);
+  assert.equal(player.remaining('lvl', 10), 0);
+  assert.equal(player.remaining('other', 10), 60);
+});
+
+test('levels finished before coins existed do not pay again', () => {
+  const clock = { t: 0 };
+  const player = createPlayer({ storage: memoryStorage(), now: () => clock.t, legacyPaid: () => ({ old: 2 }) });
+  assert.equal(player.grantLevel('old', 10, 2).total, 0);
+  assert.equal(player.grantLevel('old', 10, 3).total, 15);
+});
+
+test('buying a life: needs the coins and a free slot; coins and life change together', () => {
+  const { player } = setup();
+  assert.deepEqual(player.buyLife(), { ok: false, reason: 'full', coins: 200 }); // at 5 lives
+  loseOne(player);
+  loseOne(player);
+  const r = player.buyLife();
+  assert.equal(r.ok, true);
+  assert.equal(player.coins(), 50);
+  assert.equal(player.lives().lives, 4);
+  assert.deepEqual(player.buyLife(), { ok: false, reason: 'coins', coins: 50, need: 100 });
+  assert.equal(player.lives().lives, 4);
+});
+
+test('buying the life that fills up clears the countdown; one below max keeps it running', () => {
+  const { clock, player } = setup();
+  player.addCoins(1000);
+  loseOne(player);
+  clock.t += 5 * MIN;
+  loseOne(player);
+  player.buyLife();
+  assert.deepEqual(player.lives(), { lives: 4, max: 5, nextIn: 10 * MIN });
+  player.buyLife();
+  assert.deepEqual(player.lives(), { lives: 5, max: 5, nextIn: null });
+});
+
+test('pay: nothing is taken if the purchase cannot be applied, or without enough coins', () => {
+  const { player } = setup();
+  let applied = 0;
+  assert.deepEqual(player.pay(50, 'test', () => false), { ok: false, reason: 'not applied', coins: 200 });
+  assert.deepEqual(player.pay(500, 'test', () => applied++), { ok: false, reason: 'coins', coins: 200, need: 300 });
+  assert.equal(applied, 0);
+  assert.equal(player.pay(50, 'test', () => applied++).ok, true);
+  assert.equal(applied, 1);
+  assert.equal(player.coins(), 150);
+});
+
+test('an interrupted purchase leaves the save as it was', () => {
+  const { storage, clock, player } = setup();
+  loseOne(player);
+  const before = JSON.stringify(storage.peek());
+  assert.throws(() =>
+    player.pay(50, 'test', (s) => {
+      s.lives = 5;
+      throw new Error('app killed mid-purchase');
+    }),
+  );
+  assert.equal(JSON.stringify(storage.peek()), before);
+  assert.equal(createPlayer({ storage, now: () => clock.t }).coins(), 200);
+});
+
+test('coins and paid levels survive a reload; bad values are dropped', () => {
+  const { storage, clock, player } = setup();
+  player.grantLevel('lvl', 10, 2);
+  const again = createPlayer({ storage, now: () => clock.t });
+  assert.equal(again.coins(), 245);
+  assert.equal(again.remaining('lvl', 10), 15);
+  const damaged = setup({ v: 1, coins: -40, paid: { a: 9, b: 2 } }).player;
+  assert.equal(damaged.coins(), 200);
+  assert.equal(damaged.remaining('a', 10), 60);
+  assert.equal(damaged.remaining('b', 10), 15);
+});

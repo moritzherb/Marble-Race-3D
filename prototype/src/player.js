@@ -1,4 +1,5 @@
-// The player's resources: lives (and their regeneration), and the attempt that may cost one.
+// The player's resources: lives (and their regeneration), the attempt that may cost one, and
+// gold coins (level rewards and spending).
 // Rules and numbers come from economy.js; docs/economy.md explains them.
 //
 // Everything is one saved object. Each change reads it, changes it and writes it back in a
@@ -48,11 +49,19 @@ export function memoryStorage(initial = null) {
 const isCount = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
 
 // A fresh save, or a loaded one with anything damaged replaced by its default.
-function sanitize(raw, config) {
-  const fresh = { v: 1, lives: config.lives.start, regenFrom: null, attempt: null, seen: {}, log: [] };
-  if (!raw || typeof raw !== 'object') return fresh;
+function sanitize(raw, config, legacyPaid) {
+  const fresh = { v: 1, lives: config.lives.start, regenFrom: null, coins: config.coins.start, paid: {}, attempt: null, seen: {}, log: [] };
+  if (!raw || typeof raw !== 'object') {
+    // Levels finished before coins existed count as paid, so they don't pay out again.
+    fresh.paid = legacyPaid ? { ...legacyPaid() } : {};
+    return fresh;
+  }
   const s = { ...fresh };
   if (isCount(raw.lives, config.lives.max)) s.lives = raw.lives;
+  if (Number.isInteger(raw.coins) && raw.coins >= 0) s.coins = raw.coins;
+  if (raw.paid && typeof raw.paid === 'object') {
+    for (const [id, tier] of Object.entries(raw.paid)) if (isCount(tier, 3)) s.paid[id] = tier;
+  }
   if (typeof raw.regenFrom === 'number' && Number.isFinite(raw.regenFrom)) s.regenFrom = raw.regenFrom;
   if (raw.attempt && typeof raw.attempt.level === 'string') {
     s.attempt = { level: raw.attempt.level, free: Boolean(raw.attempt.free), staked: Boolean(raw.attempt.staked), lost: Boolean(raw.attempt.lost) };
@@ -63,7 +72,7 @@ function sanitize(raw, config) {
   return s;
 }
 
-export function createPlayer({ storage = browserStorage(), now = () => Date.now(), config = ECONOMY } = {}) {
+export function createPlayer({ storage = browserStorage(), now = () => Date.now(), config = ECONOMY, legacyPaid = null } = {}) {
   const L = config.lives;
   const period = L.regenMinutes * MINUTE;
 
@@ -89,7 +98,7 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
   // Read, change and write the save in one step. `change` returns the result.
   function update(change) {
     const t = now();
-    const s = sanitize(storage.load(), config);
+    const s = sanitize(storage.load(), config, legacyPaid);
     regenerate(s, t);
     const result = change(s, t);
     storage.save(s);
@@ -106,6 +115,33 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
   }
 
   const isFree = (levelIndex) => levelIndex < L.freeLevels;
+
+  // A level's coins: the base for the first completion, and a bonus the first time it reaches
+  // 2 stars and 3 stars.
+  function rewardFor(levelIndex) {
+    const R = config.rewards;
+    const chapter = Math.min(R.baseByChapter.length - 1, Math.floor(levelIndex / R.levelsPerChapter));
+    const base = R.baseByChapter[chapter];
+    const bonus = Math.round((base * R.starBonus) / 5) * 5;
+    return { base, two: bonus, three: bonus, total: base + 2 * bonus };
+  }
+  const tiers = (r) => [
+    { tier: 1, amount: r.base, why: 'Completed' },
+    { tier: 2, amount: r.two, why: '2 stars' },
+    { tier: 3, amount: r.three, why: '3 stars' },
+  ];
+
+  // Take `cost` coins and run `apply` in one step. Nothing is charged unless `apply` succeeds
+  // (returns something other than false), and `apply` doesn't run without the coins.
+  function pay(s, t, cost, why, apply) {
+    if (!Number.isFinite(cost) || cost < 0) return { ok: false, reason: 'bad price', coins: s.coins };
+    if (s.coins < cost) return { ok: false, reason: 'coins', coins: s.coins, need: cost - s.coins };
+    const result = apply ? apply(s, t) : true;
+    if (result === false || result?.ok === false) return { ok: false, reason: result?.reason || 'not applied', coins: s.coins };
+    s.coins -= cost;
+    note(s, t, 'spend', -cost, why);
+    return { ok: true, coins: s.coins, result };
+  }
   const atRisk = (a) => Boolean(a && !a.free && (a.staked || a.lost));
 
   // Charge the current attempt's loss, once.
@@ -160,6 +196,39 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
     // At launch: an attempt left running or lost when the game closed is charged now.
     recover: () => update((s, t) => charge(s, t, 'left a level unfinished')),
 
+    // ---------- Gold coins ----------
+    coins: () => read((s) => s.coins),
+    rewardFor,
+    // Coins still to earn on a level: what a first completion with 3 stars would pay now.
+    remaining: (levelId, levelIndex) =>
+      read((s) => tiers(rewardFor(levelIndex)).filter((x) => x.tier > (s.paid[levelId] || 0)).reduce((sum, x) => sum + x.amount, 0)),
+    // A completed level pays the tiers it hasn't paid yet, so repeating it (or a repeated
+    // completion event) pays nothing more.
+    grantLevel: (levelId, levelIndex, stars) =>
+      update((s, t) => {
+        const already = s.paid[levelId] || 0;
+        const parts = tiers(rewardFor(levelIndex)).filter((x) => x.tier > already && x.tier <= stars);
+        const total = parts.reduce((sum, x) => sum + x.amount, 0);
+        if (parts.length) s.paid[levelId] = Math.max(already, ...parts.map((x) => x.tier));
+        if (total) {
+          s.coins += total;
+          note(s, t, 'earn', total, `level ${levelIndex + 1}`);
+        }
+        return { total, parts: parts.map(({ amount, why }) => ({ amount, why })), coins: s.coins };
+      }),
+    // Spend coins on something; `apply(state)` returns false to cancel without a charge.
+    pay: (cost, why, apply) => update((s, t) => pay(s, t, cost, why, apply)),
+    buyLife: () =>
+      update((s, t) =>
+        pay(s, t, config.prices.life, 'a life', (st) => {
+          if (st.lives >= L.max) return { ok: false, reason: 'full' };
+          st.lives++;
+          if (st.lives >= L.max) st.regenFrom = null;
+          note(st, t, 'life', 1, 'bought');
+          return true;
+        }),
+      ),
+
     // ---------- First-time notes ----------
     seen: (flag) => read((s) => Boolean(s.seen[flag])),
     markSeen: (flag) =>
@@ -173,13 +242,18 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
         s.lives = Math.max(0, Math.min(L.max, n));
         s.regenFrom = s.lives >= L.max ? null : t;
       }),
+    addCoins: (n) =>
+      update((s, t) => {
+        s.coins = Math.max(0, s.coins + n);
+        note(s, t, 'earn', n, 'playtest tools');
+      }),
     // Pretend `minutes` passed: moves the countdown back instead of touching the clock.
     skipTime: (minutes) =>
       update((s, t) => {
         if (s.regenFrom !== null) s.regenFrom -= minutes * MINUTE;
         regenerate(s, t);
       }),
-    reset: () => storage.save(sanitize(null, config)),
+    reset: () => storage.save(sanitize(null, config, legacyPaid)),
     snapshot: () => read((s) => JSON.parse(JSON.stringify(s))),
   };
 }

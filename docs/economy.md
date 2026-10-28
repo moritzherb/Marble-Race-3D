@@ -70,8 +70,8 @@ A gameplay currency, earned by playing and never sold for money. A real-money cu
 |---|---|
 | First launch | 200 |
 | First completion of a level | the level's **base** reward |
-| First time with 2 stars | + half the base |
-| First time with 3 stars | + half the base |
+| First time with 2 stars | + half the base, rounded to 5 |
+| First time with 3 stars | + half the base, rounded to 5 |
 | Replays | only star bonuses not yet earned; nothing after 3 stars |
 
 The base reward rises with the chapter, because the levels are ordered by difficulty:
@@ -79,9 +79,10 @@ The base reward rises with the chapter, because the levels are ordered by diffic
 | Levels | 1–10 | 11–20 | 21–30 | 31–40 | 41–50 | 51–60 | 61–70 | 71–80 | 81–90 | 91–100 |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Base | 20 | 30 | 35 | 40 | 45 | 50 | 55 | 60 | 65 | 70 |
-| With all stars | 40 | 60 | 70 | 80 | 90 | 100 | 110 | 120 | 130 | 140 |
+| Each star bonus | 10 | 15 | 20 | 20 | 25 | 25 | 30 | 30 | 35 | 35 |
+| With all stars | 40 | 60 | 75 | 80 | 95 | 100 | 115 | 120 | 135 | 140 |
 
-Over the whole game that is 4 700 coins for completions and 9 400 with every star, plus the 200 at the start.
+Over the whole game that is 4 700 coins for completions and 9 600 with every star, plus the 200 at the start. Levels finished before coins were added count as already paid, so they only pay for stars not reached yet.
 
 #### Proposed rewards, levels 1–20 (provisional)
 

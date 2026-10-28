@@ -86,6 +86,13 @@
   .pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px 3px 7px; border-radius: 999px; background: rgba(18, 74, 77, 0.78); color: #fff; font: 700 14px/1 var(--font-display); font-variant-numeric: tabular-nums; }
   .pill svg { width: 15px; height: 15px; }
   .heart { color: #ff6b57; }
+  .top .right { justify-self: end; }
+  .reward { display: grid; gap: 4px; justify-items: center; padding: 10px; border-radius: 12px; background: #fff; box-shadow: inset 0 -3px 0 var(--maple-edge); }
+  .reward .sum { display: flex; align-items: center; gap: 6px; font: 700 24px/1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--ink); }
+  .reward .sum svg { width: 24px; height: 24px; }
+  .reward small { color: var(--ink-soft); font-size: 13px; }
+  .grid-levels .earn { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; color: #9a6a0c; }
+  .grid-levels .earn svg { width: 13px; height: 13px; }
   .resources { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
   .res { display: inline-flex; align-items: center; gap: 7px; font: 700 16px/1 var(--font-display); font-variant-numeric: tabular-nums; padding: 9px 14px 11px; }
   .res svg { width: 20px; height: 20px; }
@@ -333,7 +340,10 @@
     <div class="bar"><i id="timeBar"></i></div>
     <div class="paused" id="timerNote" hidden>Starts on first tilt</div>
   </div>
-  <button class="token icon-btn right" id="settingsBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M20.30 12.00 L22.55 13.00 L22.13 15.12 L19.67 15.18 L18.90 16.61 L17.87 17.87 L18.76 20.17 L16.96 21.37 L15.18 19.67 L13.62 20.14 L12.00 20.30 L11.00 22.55 L8.88 22.13 L8.82 19.67 L7.39 18.90 L6.13 17.87 L3.83 18.76 L2.63 16.96 L4.33 15.18 L3.86 13.62 L3.70 12.00 L1.45 11.00 L1.87 8.88 L4.33 8.82 L5.10 7.39 L6.13 6.13 L5.24 3.83 L7.04 2.63 L8.82 4.33 L10.38 3.86 L12.00 3.70 L13.00 1.45 L15.12 1.87 L15.18 4.33 L16.61 5.10 L17.87 6.13 L20.17 5.24 L21.37 7.04 L19.67 8.82 L20.14 10.38Z M15.40 12 A3.4 3.4 0 1 0 8.60 12 A3.4 3.4 0 1 0 15.40 12Z"/></svg></button>
+  <div class="right side">
+  <button class="token icon-btn" id="settingsBtn" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M20.30 12.00 L22.55 13.00 L22.13 15.12 L19.67 15.18 L18.90 16.61 L17.87 17.87 L18.76 20.17 L16.96 21.37 L15.18 19.67 L13.62 20.14 L12.00 20.30 L11.00 22.55 L8.88 22.13 L8.82 19.67 L7.39 18.90 L6.13 17.87 L3.83 18.76 L2.63 16.96 L4.33 15.18 L3.86 13.62 L3.70 12.00 L1.45 11.00 L1.87 8.88 L4.33 8.82 L5.10 7.39 L6.13 6.13 L5.24 3.83 L7.04 2.63 L8.82 4.33 L10.38 3.86 L12.00 3.70 L13.00 1.45 L15.12 1.87 L15.18 4.33 L16.61 5.10 L17.87 6.13 L20.17 5.24 L21.37 7.04 L19.67 8.82 L20.14 10.38Z M15.40 12 A3.4 3.4 0 1 0 8.60 12 A3.4 3.4 0 1 0 15.40 12Z"/></svg></button>
+  <span class="pill" id="coinsPill" aria-label="Gold coins"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#e8b23a"/><circle cx="12" cy="12" r="9" fill="none" stroke="#a8730f" stroke-width="2"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff1c2" stroke-width="1.6" opacity=".85"/></svg><b id="coinsCount">0</b></span>
+  </div>
 </header>
 
 <div class="sub">
@@ -360,6 +370,7 @@
   <div class="home-play">
     <div class="resources">
       <button class="token res" id="homeLives" type="button"><svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.2s-7.6-4.7-9.7-9.4C.8 8.3 2.9 4.4 6.7 4.4c2.1 0 3.6 1.2 5.3 3.3 1.7-2.1 3.2-3.3 5.3-3.3 3.8 0 5.9 3.9 4.4 7.4-2.1 4.7-9.7 9.4-9.7 9.4z"/></svg><span id="homeLivesText">5/5 · Full</span></button>
+      <button class="token res" id="homeCoins" type="button"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#e8b23a"/><circle cx="12" cy="12" r="9" fill="none" stroke="#a8730f" stroke-width="2"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff1c2" stroke-width="1.6" opacity=".85"/></svg><span id="homeCoinsText">0</span></button>
     </div>
     <div class="next-card">
       <p class="next" id="homeNext">Next level</p>
