@@ -96,15 +96,18 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
   }
 
   // Read, change and write the save in one step. `change` returns the result.
-  function update(change) {
+  // A read (write = false) only writes back if a life came back meanwhile: the HUD reads the
+  // save many times a second, and writing storage each time makes the game stutter on phones.
+  function update(change, write = true) {
     const t = now();
     const s = sanitize(storage.load(), config, legacyPaid);
+    const before = `${s.lives}|${s.regenFrom}`;
     regenerate(s, t);
     const result = change(s, t);
-    storage.save(s);
+    if (write || `${s.lives}|${s.regenFrom}` !== before) storage.save(s);
     return result;
   }
-  const read = (pick) => update((s, t) => pick(s, t));
+  const read = (pick) => update((s, t) => pick(s, t), false);
 
   function loseLife(s, t, why) {
     if (s.lives <= 0) return false;

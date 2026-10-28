@@ -477,18 +477,18 @@ function mergeCarved(parts) {
 }
 
 export function createView(canvas) {
-  // Draw at the screen's own pixel density (up to 3x on high-end phones). If frames get slow
-  // the resolution steps down, but never below 2x (or the screen's density, if lower):
-  // under that the machine looks soft and pixelated on a phone.
+  // Draw at up to 2.5x the CSS pixel size: on a 3x phone screen that looks just as sharp and
+  // fills 30% fewer pixels. If frames get slow the resolution steps down, but never below 2x
+  // (or the screen's density, if lower): under that the machine looks soft on a phone.
   const deviceRatio = window.devicePixelRatio || 1;
-  const maxRatio = Math.min(deviceRatio, 3);
+  const maxRatio = Math.min(deviceRatio, 2.5);
   const minRatio = Math.min(deviceRatio, 2);
   let pixelRatio = maxRatio;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(pixelRatio);
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap; // the soft variant costs far more per pixel for little gain
   renderer.toneMapping = THREE.NeutralToneMapping;
 
   const scene = new THREE.Scene();
@@ -839,6 +839,8 @@ export function createView(canvas) {
     clearLevel();
     perf.ignore = 120;
     perf.slow = 0;
+    perf.missed = 0;
+    perf.frames = 0;
     const { min, max } = track.bounds;
     const center = new THREE.Vector3((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
     view.center.copy(center);
@@ -1440,24 +1442,24 @@ export function createView(canvas) {
   }
 
   // Lower the render resolution (down to minRatio) if the device can't keep up, so the tilt
-  // stays smooth. The first frames after a level is built compile shaders and upload
-  // textures, so they are always slow and don't count; it takes two slow stretches in a row
-  // to step down.
-  const perf = { time: 0, frames: 0, ignore: 120, slow: 0 };
+  // stays smooth. It counts frames that missed the screen's refresh (over 20 ms): if more
+  // than one in five did, twice in a row, it steps down a quarter. The first frames after a
+  // level is built compile shaders and upload textures, so they don't count.
+  const perf = { missed: 0, frames: 0, ignore: 120, slow: 0 };
   function adaptResolution(dt) {
     if (perf.ignore > 0) {
       perf.ignore--;
       return;
     }
-    perf.time += dt;
     perf.frames++;
-    if (perf.frames < 90) return;
-    const avg = perf.time / perf.frames;
-    perf.time = 0;
+    if (dt > 0.02) perf.missed++;
+    if (perf.frames < 60) return;
+    const share = perf.missed / perf.frames;
+    perf.missed = 0;
     perf.frames = 0;
-    perf.slow = avg > 1 / 40 ? perf.slow + 1 : 0;
+    perf.slow = share > 0.2 ? perf.slow + 1 : 0;
     if (perf.slow >= 2 && pixelRatio > minRatio) {
-      pixelRatio = Math.max(minRatio, pixelRatio - 0.5);
+      pixelRatio = Math.max(minRatio, pixelRatio - 0.25);
       perf.slow = 0;
       renderer.setPixelRatio(pixelRatio);
       resize();

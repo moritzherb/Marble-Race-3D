@@ -494,19 +494,21 @@ function buyLifeButton(info) {
   return `<button class="gbtn wide" data-act="buyLife" data-spend type="button"${short ? ' disabled' : ''} aria-label="Buy a life for ${price} coins">${ICONS.heart}+1 <span class="cost">${ICONS.coin}${price}</span></button>`;
 }
 
+// Runs twice a second; it only touches the page where a value changed.
 function updateLives() {
   const info = player.lives();
   const coins = player.coins();
   const timer = info.nextIn === null ? 'Full' : clockText(info.nextIn);
-  $('coinsCount').textContent = coins;
-  $('homeCoinsText').textContent = coins;
-  $('homeCoins').setAttribute('aria-label', `${coins} gold coins`);
-  $('livesCount').textContent = info.lives;
-  $('homeLivesCount').textContent = info.lives;
-  $('homeLivesText').textContent = timer;
-  $('homeLives').setAttribute('aria-label', `Lives: ${livesLine(info)}`);
-  const card = document.getElementById('livesTimer');
-  if (card) card.textContent = timer;
+  const text = (el, v) => el && el.textContent !== String(v) && (el.textContent = v);
+  const label = (el, v) => el.getAttribute('aria-label') !== v && el.setAttribute('aria-label', v);
+  text($('coinsCount'), coins);
+  text($('homeCoinsText'), coins);
+  label($('homeCoins'), `${coins} gold coins`);
+  text($('livesCount'), info.lives);
+  text($('homeLivesCount'), info.lives);
+  text($('homeLivesText'), timer);
+  label($('homeLives'), `Lives: ${livesLine(info)}`);
+  text(document.getElementById('livesTimer'), timer);
 }
 setInterval(updateLives, 500);
 
@@ -661,12 +663,17 @@ function watchSolution() {
 
 // ---------- HUD ----------
 
+// Runs every frame, so it only touches the page when something shown actually changes.
+const shownClock = {};
 function updateClock() {
   const t = Math.max(0, game.timeLeft);
-  $('time').textContent = t >= 10 ? Math.ceil(t) : t.toFixed(1);
-  $('timeBar').style.transform = `scaleX(${game.times ? Math.min(1, t / game.times.limit) : 1})`;
-  $('clock').classList.toggle('low', game.phase === 'playing' && game.timerRunning && t <= 5);
-  $('timerNote').hidden = game.timerRunning || game.phase !== 'playing';
+  const show = (key, value, apply) => {
+    if (shownClock[key] !== value) apply((shownClock[key] = value));
+  };
+  show('text', t >= 10 ? String(Math.ceil(t)) : t.toFixed(1), (v) => ($('time').textContent = v));
+  show('bar', (game.times ? Math.min(1, t / game.times.limit) : 1).toFixed(3), (v) => ($('timeBar').style.transform = `scaleX(${v})`));
+  show('low', game.phase === 'playing' && game.timerRunning && t <= 5, (v) => $('clock').classList.toggle('low', v));
+  show('note', game.timerRunning || game.phase !== 'playing', (v) => ($('timerNote').hidden = v));
 }
 
 const chipsHtml = () =>

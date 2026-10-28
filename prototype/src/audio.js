@@ -134,9 +134,17 @@ export function updateRolling(speeds) {
     src.start();
     rollers.push({ f, g });
   }
+  // Only schedule a change when the sound should audibly change: scheduling one every frame
+  // piles up automation events, which some browsers (Safari) handle slowly.
   rollers.forEach((r, i) => {
     const v = speeds[i] ?? 0;
-    r.g.gain.setTargetAtTime(enabled ? Math.min(0.12, v * 0.035) : 0, ctx.currentTime, 0.05);
+    const gain = enabled ? Math.min(0.12, v * 0.035) : 0;
+    if (r.gain !== undefined && Math.abs(gain - r.gain) < 0.004 && Math.abs(v - r.v) < 0.15) return;
+    r.gain = gain;
+    r.v = v;
+    r.g.gain.cancelScheduledValues(ctx.currentTime);
+    r.g.gain.setTargetAtTime(gain, ctx.currentTime, 0.05);
+    r.f.frequency.cancelScheduledValues(ctx.currentTime);
     r.f.frequency.setTargetAtTime(180 + v * 110, ctx.currentTime, 0.05);
   });
 }

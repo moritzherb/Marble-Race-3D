@@ -96,7 +96,8 @@ export function createPowerBar({ bar, tag, powerups, player, context, use }) {
       b.classList.toggle('short', reason === 'coins');
       b.classList.toggle('used', reason === 'used');
       b.classList.toggle('active', Boolean(effect) || reason === 'saved');
-      b.style.setProperty('--p', effect?.total ? Math.max(0, effect.left / effect.total).toFixed(3) : 0);
+      const meter = String(effect?.total ? Math.max(0, effect.left / effect.total).toFixed(3) : 0);
+      if (b.dataset.meter !== meter) b.style.setProperty('--p', (b.dataset.meter = meter));
       const left = Number.isFinite(p.perAttempt) && p.perAttempt > 1 ? p.perAttempt - powerups.uses(id) : null;
       let badge = b.querySelector('.badge');
       if (left !== null && left > 0 && left < p.perAttempt) {
