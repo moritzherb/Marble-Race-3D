@@ -151,7 +151,7 @@ function restart(logIt = true) {
   game.elapsed = 0;
   game.tilts = 0;
   game.acc = 0;
-  game.attempt = { extraTimeUsed: 0 };
+  game.attempt = { extraTimeUsed: 0, secondChance: 0 }; // per-try counters for ads and coins
   game.timerRunning = settings.timerStart === 'appear';
   game.autoplay = null;
   $('banner').hidden = true;
@@ -239,6 +239,18 @@ function retryLevel() {
   restart(false);
 }
 
+const canContinue = () => !game.autoplay && game.attempt.secondChance < ECONOMY.secondChance.perAttempt && player.coins() >= ECONOMY.secondChance.cost;
+
+// "Continue +15 s · 90" on the Time's up card, once per attempt.
+function secondChanceButton() {
+  const sc = ECONOMY.secondChance;
+  if (game.autoplay || game.attempt.secondChance >= sc.perAttempt) return '';
+  const coins = player.coins();
+  const short = coins < sc.cost;
+  return `<button class="btn wide${short ? '' : ' primary'}" data-act="secondChance" data-spend type="button"${short ? ' disabled' : ''}>Continue +${sc.seconds} s <span class="cost">· ${sc.cost} ${COIN}</span></button>
+    ${short ? `<p class="fine">You have ${coins} ${COIN}.</p>` : ''}`;
+}
+
 // On the Time's up card: what accepting the loss costs.
 function lossNote() {
   if (player.isFreeLevel(game.index)) return '';
@@ -254,7 +266,7 @@ function buyLifeButton(info) {
   const price = ECONOMY.prices.life;
   const coins = player.coins();
   const short = coins < price;
-  return `<button class="btn wide${short ? '' : ' primary'}" data-act="buyLife" type="button"${short ? ' disabled' : ''}>Buy a life <span class="cost">· ${price} ${COIN}</span></button>
+  return `<button class="btn wide${short ? '' : ' primary'}" data-act="buyLife" data-spend type="button"${short ? ' disabled' : ''}>Buy a life <span class="cost">· ${price} ${COIN}</span></button>
     ${short ? `<p class="fine">You have ${coins} ${COIN}. Finish levels to earn more.</p>` : ''}`;
 }
 
@@ -494,7 +506,8 @@ function openCard(kind, data = {}) {
   card.setAttribute('aria-label', card.querySelector('h2')?.textContent || kind);
   for (const el of card.querySelectorAll('[data-act]')) el.addEventListener('click', () => ACTIONS[el.dataset.act](el));
   if (kind === 'settings' || kind === 'tools') wireSettings(card);
-  (card.querySelector('.primary') || card.querySelector('[data-act]'))?.focus({ preventScroll: true });
+  // Never put the focus on something that spends coins, so Enter can't buy by accident.
+  (card.querySelector('[data-focus]') || card.querySelector('.primary:not([data-spend])') || card.querySelector('[data-act]:not([data-spend])'))?.focus({ preventScroll: true });
 }
 
 function closeCard() {
@@ -532,6 +545,20 @@ const ACTIONS = {
       ads.showInterstitialIfDue(level, opts); // only starts loading one for a later break
     }
     play(game.index + 1);
+  },
+  // Pay coins to carry on the same attempt after the clock ran out. No life is charged now;
+  // if this attempt runs out again, that loss costs the usual one life.
+  secondChance: (el) => {
+    if (game.adShowing || game.card !== 'fail' || el.disabled) return;
+    lockCard(true);
+    const sc = ECONOMY.secondChance;
+    const paid = player.pay(sc.cost, 'second chance', () => {
+      if (game.phase !== 'failed' || game.attempt.secondChance >= sc.perAttempt) return false;
+      game.attempt.secondChance++;
+      return true;
+    });
+    if (paid.ok) continueWithExtraTime(sc.seconds);
+    else openCard('fail', { adMessage: paid.reason === 'coins' ? `That needs ${sc.cost} coins and you have ${paid.coins}.` : null });
   },
   watchAd: async (el) => {
     if (game.adShowing || game.card !== 'fail') return;
@@ -644,12 +671,13 @@ const CARDS = {
     return `
     <h2>Time's up</h2>
     <p>${home} of ${game.sim.marbles.length} marbles made it home.</p>
+    ${secondChanceButton()}
     ${offer ? `<button class="btn wide" data-act="watchAd" type="button">Watch an ad for +${ads.config.rewardedExtraTime.seconds} s</button>` : ''}
     <p class="note" role="status">${adMessage || game.level.learn}</p>
     ${lossNote()}
     <div class="row">
       <button class="btn" data-act="home" type="button">Home</button>
-      <button class="btn primary" data-act="retry" type="button">Try again</button>
+      <button class="btn${canContinue() ? '' : ' primary'}" data-act="retry" type="button" data-focus>Try again</button>
     </div>`;
   },
   // Asked before restarting or leaving an attempt that would cost a life.
