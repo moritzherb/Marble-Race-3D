@@ -62,7 +62,10 @@ export function stepSim(sim, dt, g) {
     if (m.delivered || m.lost) continue;
     const edge = sim.track.edges[m.edge];
     if (edge.lift) {
-      // A stairway: the marble climbs at a steady pace whatever the tilt.
+      // A stairway: the marble climbs at a steady pace whatever the tilt. One that rolls in
+      // from the top is turned straight back out (the game shows it bouncing off).
+      const top = edge.lift > 0 ? edge.L : 0;
+      if (m.v * edge.lift < -0.05 && Math.abs(m.s - top) < 0.3) events.push({ type: 'liftBack', marble: m.id });
       m.v = PHYSICS.liftSpeed * edge.lift;
       const before = { edge: m.edge, s: m.s };
       moveAlong(sim, m, m.v * dt, g, events);

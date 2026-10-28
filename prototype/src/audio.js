@@ -81,6 +81,11 @@ export function playEvent(e) {
       tone(2600, t, 0.05, Math.min(0.2, 0.05 * e.strength));
       tone(3700, t, 0.04, Math.min(0.12, 0.03 * e.strength));
       break;
+    case 'liftBack':
+      if (throttle('liftBack' + e.marble, 0.4)) return;
+      thud(500, 0.07, 0.4);
+      tone(196, t, 0.16, 0.12, 'triangle');
+      break;
     case 'bump':
       if (throttle('bump' + e.marble, 0.08)) return;
       thud(500, 0.07, Math.min(0.5, 0.12 * e.strength));

@@ -1976,7 +1976,7 @@ const TIPS = {
   'off-the-plate': 'Striped shutters close when pressed',
   'colour-check': 'Filters only let their own colour through',
   wormhole: 'Portals send marbles to their twin',
-  'first-floor': 'Stairways carry marbles up',
+  'first-floor': 'Stairs only go up',
   whirlpool: 'Whirls drop marbles to the tier below',
   'sky-bridges': 'Keep rolling over sky rails',
   'drop-zone': 'Stop over a groove to drop onto it',

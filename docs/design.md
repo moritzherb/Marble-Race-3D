@@ -32,7 +32,7 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 8. **Traffic:** marbles block each other in a groove.
 9. **Colour filter:** a coloured hood over a groove. The marble of that colour rolls through; every other colour bounces off it as off a closed gate.
 10. **Portal:** two vortex cups of the same colour are a pair. A marble that rolls into one comes out of the other, moving away from it at the same speed.
-11. **Stairway:** carries a marble up one tier at a steady pace (1.6 blocks/s), whatever the tilt. One-way: a marble arriving at the top is pushed back out. With ramps and whirls going down, stairways make loops.
+11. **Stairway:** carries a marble up one tier at a steady pace (1.6 blocks/s), whatever the tilt. One-way: a marble arriving at the top is pushed back out, and a red ring pulses from it. Green chevrons on the treads light up one after another, upwards, like an escalator, so the direction shows before anyone tries. With ramps and whirls going down, stairways make loops.
 12. **Whirl:** a funnel fed by grooves on its tier. The marble circles down (steeper than any tilt, so one-way), drops through the hole into the block below, and leaves through that block's grooves. If it has two ways out, the tilt picks one.
 13. **Sky rail:** a magnetic beam over a gap that a marble hangs from. Kept moving, it crosses. If it stops for a quarter of a second (slower than 0.5 blocks/s), it falls: into the groove directly below, which is how a marble gets down to a lower deck on purpose, or, with nothing below, out of the game. A sky rail can end over a groove (the marble rolls to the end, stops and drops).
 14. **Fail:** the clock reaches zero (20 seconds on every level), or a marble falls off a sky rail into nothing.

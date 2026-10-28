@@ -624,6 +624,7 @@ function tick(dt) {
 
 function onSimEvent(e) {
   audio.playEvent(e);
+  if (e.type === 'liftBack') view.nope(e.marble);
   if (e.type === 'deliver') {
     renderChips();
     try {

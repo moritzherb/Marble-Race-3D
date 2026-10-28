@@ -88,8 +88,14 @@ test('a stairway carries a marble up a tier, whatever the tilt', () => {
 
 test('a stairway only goes up: a marble rolling in from the top is pushed back out', () => {
   let lowest = Infinity;
-  replay(stairway([4, 1, 0]), [['W', 4]], { maxTime: 4, onStep: (sim) => (lowest = Math.min(lowest, sim.marbles[0].pos[1])) });
+  const run = replay(stairway([4, 1, 0]), [['W', 4]], { maxTime: 4, onStep: (sim) => (lowest = Math.min(lowest, sim.marbles[0].pos[1])) });
   assert.ok(lowest > 1.5, `went down to y=${lowest.toFixed(2)}`);
+  assert.ok(run.events.some((e) => e.type === 'liftBack'), 'the game is told so it can show it');
+});
+
+test('climbing a stairway the normal way is not reported as being turned back', () => {
+  const run = replay(stairway([1, 0, 0]), [['E', 0.5], ['N', 2.2], ['E', 2]], { maxTime: 5 });
+  assert.ok(!run.events.some((e) => e.type === 'liftBack'));
 });
 
 // ---------- Whirls ----------

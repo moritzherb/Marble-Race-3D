@@ -541,7 +541,17 @@ export function createView(canvas) {
   boltGeo.rotateX(-Math.PI / 2);
   const shutterTex = shutterTexture();
   const shutterRed = new THREE.MeshStandardMaterial({ color: 0xd8352a, roughness: 0.5 });
-  const shared = new Set([cubeGeo, archGeo, archUnderCarvedGeo, liningGeo, shadeGeo, marbleGeo, postGeo, knobGeo, beadGeo, boltGeo]);
+  // A flat chevron for the stairways, pointing along +x (up the stairs once turned).
+  const chevronShape = new THREE.Shape();
+  [[0.09, 0], [-0.04, 0.13], [-0.11, 0.13], [0.02, 0], [-0.11, -0.13], [-0.04, -0.13]].forEach(([x, z], i) => (i ? chevronShape.lineTo(x, z) : chevronShape.moveTo(x, z)));
+  chevronShape.closePath();
+  const chevronGeo = new THREE.ShapeGeometry(chevronShape);
+  chevronGeo.rotateX(-Math.PI / 2);
+  // A thin ring lying flat, for a marble turned back at the top of a stairway.
+  const nopeGeo = new THREE.RingGeometry(0.2, 0.26, 40);
+  nopeGeo.rotateX(-Math.PI / 2);
+
+  const shared = new Set([cubeGeo, archGeo, archUnderCarvedGeo, liningGeo, shadeGeo, marbleGeo, postGeo, knobGeo, beadGeo, boltGeo, chevronGeo, nopeGeo]);
 
   let pivot = null; // tilts around the machine's centre
   let content = null; // machine coordinates live here
@@ -792,6 +802,39 @@ export function createView(canvas) {
     }
   }
 
+  // Stairways: a green chevron on every tread, pointing up. In play a light runs up them, like
+  // an escalator, so it's clear the stairs only go one way.
+  function addStairs(track) {
+    const chevrons = [];
+    for (const piece of track.pieces) {
+      if (piece.type !== 'stairs') continue;
+      for (const id of piece.edges) {
+        const edge = track.edges[id];
+        if (!edge.lift) continue;
+        const [lo, hi] = edge.pts[0][1] <= edge.pts.at(-1)[1] ? [edge.pts[0], edge.pts.at(-1)] : [edge.pts.at(-1), edge.pts[0]];
+        const angle = Math.atan2(-(hi[2] - lo[2]), hi[0] - lo[0]);
+        for (let k = 0; k < STEPS; k++) {
+          const f = (k + 0.31) / STEPS;
+          const y = lo[1] + ((hi[1] - lo[1]) * k) / (STEPS - 1) + FLOOR + 0.006;
+          const flat = (color, order, scale) => {
+            const mesh = new THREE.Mesh(chevronGeo, new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+            mesh.renderOrder = order;
+            mesh.scale.setScalar(scale);
+            return mesh;
+          };
+          const group = new THREE.Group();
+          group.add(flat(0x16620f, 4, 1.25), flat(0xa6ff7a, 5, 1));
+          group.children[1].position.y = 0.002;
+          group.position.set(lo[0] + (hi[0] - lo[0]) * f, y, lo[2] + (hi[2] - lo[2]) * f);
+          group.rotation.y = angle;
+          content.add(group);
+          chevrons.push({ group, k });
+        }
+      }
+    }
+    return chevrons;
+  }
+
   function build(track) {
     clearLevel();
     perf.ignore = 120;
@@ -938,6 +981,7 @@ export function createView(canvas) {
     const portals = addPortals(track);
     addSky(track);
     addWhirls(track);
+    const stairs = addStairs(track);
 
     // Cells with a different block directly on top are tunnels: only there is a marble
     // hidden from every angle, so only there does its outline show through the wood. A sky
@@ -988,7 +1032,7 @@ export function createView(canvas) {
     cam.far = size * 4;
     cam.updateProjectionMatrix();
 
-    current = { track, goals, plates, gates, cables, marbles, portals, inTunnel, hint: null };
+    current = { track, goals, plates, gates, cables, marbles, portals, stairs, nopes: [], inTunnel, hint: null };
     fitCamera();
     view.distance = view.targetDistance;
   }
@@ -1144,7 +1188,39 @@ export function createView(canvas) {
     current.hint = null;
   }
 
+  // A marble that tried to roll down a stairway: a red ring pulses out from it.
+  function nope(index) {
+    const vis = current?.marbles[index];
+    if (!vis || current.nopes.some((n) => n.index === index && n.age < 0.4)) return;
+    const ring = new THREE.Mesh(nopeGeo, new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, depthTest: false }));
+    ring.renderOrder = 16;
+    ring.position.copy(vis.mesh.position);
+    content.add(ring);
+    current.nopes.push({ index, ring, age: 0 });
+  }
+
   function updateEffects(sim, dt) {
+    // Stairways: a light runs up the chevrons, tread by tread.
+    for (const { group, k } of current.stairs) {
+      const phase = reducedMotion ? 0.5 : (((clock * 1.3 - k / STEPS) % 1) + 1) % 1;
+      const glow = reducedMotion ? 0.9 : 0.4 + 0.6 * (1 - phase) ** 2;
+      group.children.forEach((c) => (c.material.opacity = glow));
+      group.scale.setScalar(reducedMotion ? 1.15 : 1.05 + 0.15 * (1 - phase) ** 2);
+    }
+    current.nopes = current.nopes.filter((n) => {
+      n.age += dt;
+      const p = n.age / 0.55;
+      if (p >= 1) {
+        content.remove(n.ring);
+        n.ring.material.dispose();
+        return false;
+      }
+      n.ring.position.copy(current.marbles[n.index].mesh.position);
+      n.ring.position.y -= MARBLE_VIEW_R - 0.02;
+      n.ring.scale.setScalar(0.8 + 1.4 * p);
+      n.ring.material.opacity = 0.95 * (1 - p);
+      return true;
+    });
     const t = current.trail;
     if (t) {
       t.left -= dt;
@@ -1432,5 +1508,5 @@ export function createView(canvas) {
     outlines: current ? current.marbles.map((m) => m.ghost.visible) : [],
   });
 
-  return { build, sync, frame, resize, orbit, setSpin, popIn, screenToGround, showHintArrow, showMarbleHint, clearHint, renderer, debug };
+  return { build, sync, frame, resize, orbit, setSpin, popIn, screenToGround, showHintArrow, showMarbleHint, clearHint, nope, renderer, debug };
 }
