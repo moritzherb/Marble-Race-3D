@@ -982,6 +982,8 @@ const CARDS = {
       <li>A marble only rolls along its own groove.</li>
       <li>Get every marble into the ring of its colour before time runs out.</li>
       <li>A marble resting on a gold target holds the gate at the other end of its cable open. A goal with a metal band opens its gate once filled.</li>
+      <li>Losing a level costs a life (levels 1–10 never do). Lives come back one every 15 minutes.</li>
+      <li>Finishing a level pays gold coins. Spend them on lives, a second chance or power-ups.</li>
     </ul>
     <button class="btn primary wide" data-act="close" type="button">Got it</button>`,
   // For the designer and playtest sessions, not for players.

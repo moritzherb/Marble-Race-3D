@@ -66,7 +66,8 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 - **Difficulty:** levels are ordered by a score built from the fewest moves the solver needs (one tilt held until everything stops), how many opening moves lose the level, how much of the position space is a dead end, and how few different shortest solutions there are. It climbs from 2–3 moves early to 13–15 moves at the end, and the time factor tightens from 3.0 to about 2.0 along the way. See [levels.md](levels.md).
 - **Every lock has a purpose:** the audit jams each gate (or shutter) open and re-solves. A level only ships if that makes it shorter or breaks every shortest solution; a gate you can ignore is cut. Nothing may go unused either: every gate, plate and goal is reached by the reference run or by a designed trap.
 - **Fair for people, not just the solver:** each reference solution must still win when every hold and pause is made longer and sloppier (six randomised replays), so no level depends on frame-perfect timing.
-- **For testers:** Settings → Playtest tools → Reset progress locks everything again for the next person. The level list lives there too, since players just play the next level.
+- **Lives, coins and power-ups:** five lives that refill one per 15 minutes, gold coins earned from first completions and new stars, a paid second chance, and six power-ups from level 11. Every one has a per-attempt limit so the puzzles stay the challenge. See [economy.md](economy.md).
+- **For testers:** Settings → Playtest tools → Reset progress locks everything again for the next person. The same panel changes lives and coins. The level list lives there too, since players just play the next level.
 
 ## Biggest risk, and the first test
 

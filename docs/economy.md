@@ -171,7 +171,7 @@ The card's options, in order:
 **Timed effects:**
 
 - **Timing:** they run on play time, so they pause with the game, and they end when the level ends.
-- **Display:** the button's ring empties as the effect runs.
+- **Display:** a meter under the token empties as the effect runs.
 
 ### 1. Extra Time
 
@@ -261,7 +261,7 @@ Once per attempt.
   - the machine's tilt;
   - the clock (time left and time played).
 - **Exactness:** the physics is fully described by these numbers, so restoring is exact. No physics bodies need re-syncing.
-- **The button:** shows "Saved 0:14" while a checkpoint is held.
+- **The token:** stays lit while a checkpoint is held. The banner and the restore button show the saved time ("Back to checkpoint · 0:14").
 
 **Restoring:**
 
@@ -292,11 +292,11 @@ Once per attempt.
   - **Right:** Pause (Resume, Settings, Home), with the coin balance under it.
 - **Bottom of a level:**
   - **The power-up row:** six wooden tokens, each with an icon and its price, sitting above the existing view and Restart buttons. The tokens sit outside the 3D canvas, so a drag that tilts the machine can't press one, and a tap on a token never tilts the machine.
-  - **Token states:** ready, too expensive (price in red), used up (dimmed), active (glow and a draining ring), or saved (Checkpoint).
-- **Tap to choose, tap again to use:** the first tap opens a small wooden tag above the row with the name, the effect, the price and a Use button. A second tap on the same token, or Use, buys it. The tag closes after 4 s or on any other tap. That's quick, but a stray tap never spends coins.
+  - **Token states:** ready, too expensive (price in red), used up (dimmed), active (glow and a draining meter), or saved (Checkpoint).
+- **Tap to choose, tap again to use:** the first tap opens a small wooden tag above the row with the name, the effect, the price and a Use button. A second tap on the same token, or Use, buys it. The tag closes after a few seconds or on any other tap. That's quick, but a stray tap never spends coins.
 - **Home screen:**
   - A ♥ token (lives and the next-life countdown, opens the lives card) and a coin token (opens a short explanation), above Play.
-- **Level list:** each unlocked level shows the coins still to earn on it ("+60"), or a check when nothing is left.
+- **Level list:** each unlocked level shows the coins still to earn on it ("+60"), and nothing once it has paid everything.
 - **Win card:** shows the coins just earned, split into completion and stars.
 - **First-time notes,** shown once each:
   - the first lost life;
@@ -391,6 +391,101 @@ Nothing in the game code outside `player.js` needs to change.
 | Checkpoint across levels | dropped on leaving or restarting | powerups.test |
 | Magnetic Pull | straight and curved approach, closed gate, no route, tilt against it, delivered early, expiry | powerups.test |
 | Hint tables | each level's start position is listed with its fewest moves, and following the hints wins in that many moves | hints.test |
+
+## How it was built, and how to check each part
+
+The system went in as five steps, each tested before the next. To check one by hand:
+
+1. Start the game with `npm run serve` and open http://localhost:8000.
+2. Use **Settings → Playtest tools** to set lives and coins:
+   - **Lives:** −1, Skip 15 min, Fill and Reset.
+   - **Gold coins:** +500.
+3. Run `npm test` for the automated checks.
+
+### Step 1: lives and regeneration
+
+**Files:**
+
+- `economy.js` (the `lives` section)
+- `player.js`
+- `main.js`: the heart in the HUD, the home token, and the Lives, Out of lives and Restart this level? cards
+- `prototype/test/player.test.js`
+
+**Checklist:**
+
+- [ ] Home shows ♥ 5/5 · Full. Lose a life: it shows 4/5 and a 15:00 countdown that ticks.
+- [ ] Playtest tools → Skip 15 min brings the life back, and the countdown disappears at 5/5.
+- [ ] In level 11 or later, Restart within 10 s is free. After 10 s the button reads "Restart · −1 ♥" and asks first.
+- [ ] Let the clock run out: the card says what accepting costs, and Try again takes exactly one life.
+- [ ] At 0 lives, Play on level 11+ opens Out of lives. Levels 1–10 still play.
+- [ ] Reload the page mid-level, after 10 s of play. A note says a life was used, and only once.
+
+### Step 2: gold coins
+
+**Files:**
+
+- `economy.js` (the `coins`, `rewards` and `prices` sections)
+- `player.js` (`grantLevel`, `pay`, `buyLife`)
+- `main.js`: the coin pill and token, the reward on the win card, coins left in the level list, Buy a life
+
+**Checklist:**
+
+- [ ] A new player has 200 coins.
+- [ ] A first completion with 3 stars on level 11 pays 30 + 15 + 15. Playing it again pays nothing.
+- [ ] The level list shows "+60" on a level not yet played.
+- [ ] Buy a life takes 150, adds a life, and a double tap buys only one. With too few coins the button is disabled and says how many you have.
+
+### Step 3: second chance
+
+**Files:**
+
+- `economy.js` (`secondChance`)
+- `main.js` (the Time's up card)
+
+**Checklist:**
+
+- [ ] When time runs out, Continue +15 s · 90 resumes the same machine with 15 s and the same lives.
+- [ ] It's offered once per attempt. Running out again costs one life.
+
+### Step 4: power-up row, Extra Time, Speed Boost, Hint, Open All Gates
+
+**Files:**
+
+- `powerups.js`
+- `powerbar.js`
+- `hints.js` with `prototype/hints/` (built by `tools/hints.mjs`)
+- `sim.js` (`speedScale`, `gate.forced`)
+- `render.js` (the hint arrow and the marble glow)
+
+**Checklist:**
+
+- [ ] Level 11 shows the power-up introduction once. The row sits under the machine.
+- [ ] The first tap on a token opens its tag without spending. A second tap uses it.
+- [ ] Extra Time adds 10 s once. Speed Boost glows the marbles for 6 s. Open All Gates lifts every gate for 5 s, then they return to what the plates say.
+- [ ] Hint draws an arrow over the machine. After a losing first move it says the level can't be won from here, and charges nothing.
+
+### Step 5: Magnetic Pull and Checkpoint
+
+**Files:**
+
+- `route.js`
+- `powerups.js` (`magnet`, `checkpoint`, `snapshotOf`, `restoreInto`)
+- `main.js` (the picker and Back to checkpoint)
+- `render.js` (the halo)
+
+**Checklist:**
+
+- [ ] Magnetic Pull asks which marble, and Cancel is free. A marble behind a shut gate is refused with no charge. A pulled marble gets a gold halo and heads for its goal. A full tilt the other way still wins.
+- [ ] Checkpoint saves with the time shown. Let the clock run out: Back to checkpoint · −1 ♥ restores the moment and the time, once. With only one life left it's disabled and explains why.
+- [ ] Finishing the level or restarting drops the checkpoint.
+
+### What the automated tests cover
+
+| File | What it checks |
+|---|---|
+| `player.test.js` (27 tests) | Regeneration, including closed for 30 minutes, the cap at 5 and the clock moved back. What costs a life, and never twice. Charging at relaunch. Rewards and replays. Buying with too few coins. Interrupted purchases. Damaged saves |
+| `powerups.test.js` (20 tests) | Each power-up's effect, price and limit, and refusals that cost nothing. Boosted marbles staying on their grooves. Gates returning after Open All Gates. The pull: straight and curved approaches, closed gate, ramps, tilting against it, expiry. Checkpoints restoring exactly and continuing identically |
+| `hints.test.js` | Every level's table matches its machine. Following the hints wins each level in its fewest moves. Lost positions are recognised |
 
 ## Tuning (for beginners)
 

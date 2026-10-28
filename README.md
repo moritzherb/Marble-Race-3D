@@ -14,6 +14,8 @@ This prototype exists to answer one question before more is built: **can players
 
 **How it plays:** the app opens on a home screen with your progress and the next level turning slowly behind a Play button. Levels and Settings sit below it. Settings has Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. There are 100 levels, and they unlock in order. They get steadily harder: the last ones take 13–15 moves and link two machines together.
 
+**Lives, coins and power-ups:** you have 5 lives, and one comes back every 15 minutes, even with the game closed. Losing a level from 11 on costs one; levels 1–10 are free. Levels pay gold coins the first time you finish them, plus bonuses for 2 and 3 stars. Coins buy lives, a second chance when time runs out, and six power-ups from level 11: Extra Time, Speed Boost, Hint, Open All Gates, Magnetic Pull and Checkpoint. The rules and numbers are in [docs/economy.md](docs/economy.md).
+
 **Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal), R to restart, and Enter on the home screen to play.
 
 **For testers:** Settings → Playtest tools has the level list, Reset progress (a fresh run from level 1), the clock and direction-assist options, feel tuning and the playtest log.
@@ -40,6 +42,13 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 | `prototype/src/render.js` | three.js scene: wood, grooves, marbles, gates, camera |
 | `prototype/src/input.js` | Drag and keyboard to tilt |
 | `prototype/src/main.js` | Game flow, HUD, menus, playtest log |
+| `prototype/src/economy.js` | Every number for lives, coins, rewards and power-ups |
+| `prototype/src/player.js` | Lives and their regeneration, gold coins, level rewards, and which attempts cost a life; one saved object |
+| `prototype/src/powerups.js` | Power-up rules, charging and effects, and checkpoints |
+| `prototype/src/powerbar.js` | The power-up row and its tap-to-choose tag |
+| `prototype/src/route.js` | The way a marble can roll to its goal, for Magnetic Pull |
+| `prototype/src/hints.js` | The Hint power-up's lookup, using the tables in `prototype/hints/` |
+| `prototype/src/moves.js` | Whole moves (tilt until everything stops), shared by the game's hints and the tools |
 | `prototype/src/ads.js` | Ad rules for the app builds: rewarded extra time, interstitial frequency, timeouts |
 | `prototype/src/ads-admob.js` | Google AdMob (with consent) through the Capacitor plugin |
 
@@ -60,6 +69,7 @@ Node scripts in `tools/` that the levels were built and checked with:
 | `generate.mjs` | Given a hand-drawn machine with candidate spots, searches goal, plate, gate and marble placements for the hardest fair puzzle it can hold |
 | `finalize.mjs` | Removes unused dead ends, finds a reference run a person can repeat, adds traps and sets the time factor |
 | `prune.mjs` | Map editing helpers used by `finalize.mjs` |
+| `hints.mjs` | Builds the Hint tables in `prototype/hints/`: every position a level can reach, with the best next tilt. Re-run after changing a level or the physics; `npm test` says when they're out of date |
 
 A level only ships if every lock has a purpose, nothing in it goes unused, and its reference solution still wins when the holds and pauses are made longer and less precise, the way a person plays.
 
@@ -76,6 +86,7 @@ The apps show Google AdMob ads, test ads only for now: an optional rewarded ad f
 - [docs/design.md](docs/design.md): decisions from the concept review (signature mechanic, rules, controls, visual direction)
 - [docs/levels.md](docs/levels.md): all hundred levels, with timings, move counts and what each lock does
 - [docs/playtest.md](docs/playtest.md): the first playtest script and go/no-go signals
+- [docs/economy.md](docs/economy.md): lives, gold coins, the second chance and power-ups: rules, prices, the reasoning, and test checklists
 - [docs/ads.md](docs/ads.md): what the project supports for mobile ads, the AdMob setup, privacy and store disclosures, and test steps
 
 ## Publishing the phone build
