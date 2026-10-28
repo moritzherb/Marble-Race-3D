@@ -7,6 +7,17 @@
     "test": "node --test prototype/test/*.test.js",
     "serve": "python3 -m http.server 8000 --directory prototype",
     "build:artifact": "node tools/build-artifact.mjs",
-    "solve": "node tools/solve.mjs"
+    "solve": "node tools/solve.mjs",
+    "audit": "node tools/audit.mjs",
+    "build:www": "node tools/build-www.mjs",
+    "cap:sync": "npm run build:www && npx cap sync"
+  },
+  "devDependencies": {
+    "@capacitor-community/admob": "^8.2.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "three": "^0.170.0"
   }
 }

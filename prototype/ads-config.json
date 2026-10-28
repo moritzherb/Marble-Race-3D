@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "testMode": true,
+  "rewardedExtraTime": {
+    "enabled": true,
+    "seconds": 20,
+    "maxPerAttempt": 1
+  },
+  "interstitial": {
+    "enabled": true,
+    "everyCompletedLevels": 3,
+    "notBeforeLevel": 11,
+    "quietAfterRewardedSeconds": 120
+  },
+  "loadTimeoutSeconds": 10,
+  "retryAfterSeconds": 30,
+  "remoteConfigUrl": "",
+  "units": {
+    "android": {
+      "rewarded": "",
+      "interstitial": ""
+    },
+    "ios": {
+      "rewarded": "",
+      "interstitial": ""
+    }
+  },
+  "childDirected": false,
+  "consentDebugGeography": "",
+  "testDeviceIds": []
+}

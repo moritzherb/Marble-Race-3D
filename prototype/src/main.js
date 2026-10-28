@@ -9,7 +9,9 @@ import { replay, levelTimes } from './replay.js';
 import { createView, MARBLE_COLORS } from './render.js';
 import { attachInput } from './input.js';
 import * as audio from './audio.js';
-import { loadSettings, saveSettings, loadProgress, recordResult, resetProgress, loadLog, appendLog, clearLog } from './store.js';
+import { loadSettings, saveSettings, loadProgress, recordResult, resetProgress, loadLog, appendLog, clearLog, adStore } from './store.js';
+import { createAds, loadAdConfig } from './ads.js';
+import { admobProvider, nativePlatform } from './ads-admob.js';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_PHYSICS = { ...PHYSICS };
@@ -37,9 +39,21 @@ const game = {
   tilts: 0,
   acc: 0,
   autoplay: null,
+  attempt: { extraTimeUsed: 0 }, // one try at a level, for the rewarded extra time
+  adShowing: false,
   card: null,
   levelsFrom: 'home', // where the level list's Back button returns to
 };
+
+// Ads exist only in the Android and iOS app builds (see ads.js). In a browser there is no
+// ad SDK, so `ads.available()` stays false and no ad buttons appear.
+const ads = createAds({ store: adStore });
+async function startAds() {
+  if (!nativePlatform()) return;
+  const fetchJson = (url) => fetch(url, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+  const config = await loadAdConfig({ fetchJson, store: adStore });
+  await ads.attach(admobProvider(config), config);
+}
 
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
 
@@ -118,6 +132,7 @@ function restart(logIt = true) {
   game.elapsed = 0;
   game.tilts = 0;
   game.acc = 0;
+  game.attempt = { extraTimeUsed: 0 };
   game.timerRunning = settings.timerStart === 'appear';
   game.autoplay = null;
   $('banner').hidden = true;
@@ -135,6 +150,7 @@ function win() {
   if (!demo) {
     recordResult(game.level.id, stars, t);
     logAttempt('won', stars);
+    ads.levelCompleted(game.index + 1);
   }
   audio.playEvent({ type: 'win' });
   const attempt = game.sim;
@@ -150,6 +166,31 @@ function fail() {
   if (!game.autoplay) logAttempt('time-up');
   audio.playEvent({ type: 'fail' });
   openCard('fail');
+}
+
+// The rewarded ad paid out: pick the level up where the clock stopped.
+function continueWithExtraTime(seconds) {
+  closeCard();
+  game.phase = 'playing';
+  game.timeLeft = seconds;
+  game.timerRunning = true;
+  logAttempt('extra-time');
+  $('banner').textContent = `+${seconds} s`;
+  $('banner').hidden = false;
+  setTimeout(() => {
+    if ($('banner').textContent === `+${seconds} s`) $('banner').hidden = true;
+  }, 1500);
+  updateClock();
+}
+
+const AD_MESSAGES = {
+  unavailable: 'No ad is available right now, so no extra time this round. You can try the level again.',
+  'closed-early': 'The ad closed before the end, so there\'s no extra time this round. You can try the level again.',
+};
+
+// While an ad runs, every button on the card is disabled so nothing can be pressed twice.
+function lockCard(locked) {
+  for (const b of $('card').querySelectorAll('button')) b.disabled = locked;
 }
 
 function releaseTilt() {
@@ -190,9 +231,10 @@ attachInput($('stage'), {
 $('playBtn').addEventListener('click', () => play());
 $('homeLevels').addEventListener('click', () => openCard('levels', { from: 'home' }));
 $('homeSettings').addEventListener('click', () => openCard('settings'));
-$('homeBtn').addEventListener('click', () => showHome());
+$('homeBtn').addEventListener('click', () => !game.adShowing && showHome());
 $('settingsBtn').addEventListener('click', () => openCard('settings'));
 $('restartBtn').addEventListener('click', () => {
+  if (game.adShowing) return;
   audio.unlock();
   closeCard();
   restart();
@@ -205,10 +247,10 @@ window.addEventListener('keydown', (e) => {
   else if (game.screen === 'home' && !game.card && (e.code === 'Enter' || e.code === 'Space')) {
     e.preventDefault();
     play();
-  } else if (game.screen === 'game' && e.code === 'KeyR' && !e.repeat) {
+  } else if (game.screen === 'game' && e.code === 'KeyR' && !e.repeat && !game.adShowing) {
     closeCard();
     restart();
-  } else if ((e.code === 'KeyN' || e.code === 'Enter') && game.card === 'win') {
+  } else if ((e.code === 'KeyN' || e.code === 'Enter') && game.card === 'win' && !game.adShowing) {
     ACTIONS.next();
   }
 });
@@ -361,11 +403,42 @@ const isLast = () => game.index === LEVELS.length - 1;
 const ACTIONS = {
   close: () => closeCard(),
   retry: () => {
+    if (game.adShowing) return;
     closeCard();
     restart(false);
   },
-  next: () => (isLast() ? showHome() : play(game.index + 1)),
-  home: () => showHome(),
+  // A break between levels: the only place an interstitial may show.
+  next: async () => {
+    if (game.adShowing) return;
+    if (isLast()) return showHome();
+    const level = game.index + 1;
+    const opts = { afterRewarded: game.attempt.extraTimeUsed > 0 };
+    if (ads.interstitialBlocker(level, opts) === null) {
+      game.adShowing = true;
+      lockCard(true);
+      await ads.showInterstitialIfDue(level, opts);
+      game.adShowing = false;
+    } else {
+      ads.showInterstitialIfDue(level, opts); // only starts loading one for a later break
+    }
+    play(game.index + 1);
+  },
+  watchAd: async (el) => {
+    if (game.adShowing || game.card !== 'fail') return;
+    const attempt = game.attempt;
+    game.adShowing = true;
+    lockCard(true);
+    el.textContent = 'Loading ad…';
+    const result = await ads.watchForExtraTime(attempt);
+    game.adShowing = false;
+    if (game.card !== 'fail' || game.attempt !== attempt) return;
+    if (result.granted) continueWithExtraTime(result.seconds);
+    else openCard('fail', { adMessage: AD_MESSAGES[result.reason] || AD_MESSAGES.unavailable });
+  },
+  privacy: () => ads.showPrivacyOptions().catch(() => {}),
+  home: () => {
+    if (!game.adShowing) showHome();
+  },
   settings: () => openCard('settings'),
   howto: () => openCard('howto'),
   tools: () => openCard('tools'),
@@ -423,12 +496,14 @@ const CARDS = {
       <button class="btn" data-act="retry" type="button">Play again</button>
       <button class="btn primary" data-act="next" type="button">${isLast() ? 'Home' : 'Next level'}</button>
     </div>`,
-  fail: () => {
+  fail: ({ adMessage } = {}) => {
     const home = game.sim.marbles.filter((m) => m.delivered).length;
+    const offer = !adMessage && ads.canOfferExtraTime(game.attempt);
     return `
     <h2>Time's up</h2>
     <p>${home} of ${game.sim.marbles.length} marbles made it home.</p>
-    <p class="note">${game.level.learn}</p>
+    ${offer ? `<button class="btn wide" data-act="watchAd" type="button">Watch an ad for +${ads.config.rewardedExtraTime.seconds} s</button>` : ''}
+    <p class="note" role="status">${adMessage || game.level.learn}</p>
     <div class="row">
       <button class="btn" data-act="home" type="button">Home</button>
       <button class="btn primary" data-act="retry" type="button">Try again</button>
@@ -466,6 +541,7 @@ const CARDS = {
       ${toggle('hints', 'Hints', ICONS.hints)}
     </div>
     <button class="btn primary wide" data-act="howto" type="button">How to play</button>
+    ${ads.privacyOptionsRequired ? '<p class="fine"><button class="linkish" data-act="privacy" type="button">Privacy choices for ads</button></p>' : ''}
     <p class="fine"><button class="linkish" data-act="tools" type="button">Playtest tools</button></p>`,
   howto: () => `
     <div class="card-head"><h2>How to play</h2>
@@ -494,6 +570,7 @@ const CARDS = {
         <button type="button" data-set="directionAssist" data-v="true" aria-pressed="${settings.directionAssist}">On</button>
         <button type="button" data-set="directionAssist" data-v="false" aria-pressed="${!settings.directionAssist}">Off</button>
       </span></div>
+    <div class="setting"><label>Ads<small>${adStatus()}</small></label></div>
     <div class="setting"><label>Progress<small>Locks every level but the first again, for the next tester</small></label>
       <span class="row"><button class="btn small" data-act="levels" type="button">Levels</button>
       <button class="btn small" data-act="resetProgress" type="button">Reset progress</button></span></div>
@@ -536,6 +613,14 @@ function slider(key, label, value, min, max, step, target) {
   const owner = target === PHYSICS ? 'physics' : 'controls';
   return `<div class="slider"><div class="lab"><span>${label}</span><span id="val-${key}">${value}</span></div>
     <input type="range" id="tune-${key}" data-owner="${owner}" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></div>`;
+}
+
+function adStatus() {
+  const s = ads.status();
+  if (!nativePlatform()) return 'Off: ads only run in the Android and iOS app builds';
+  if (!ads.available()) return `Not active (${s.provider === 'none' ? 'no ad SDK' : 'no consent to request ads'})`;
+  const c = ads.config.interstitial;
+  return `AdMob ${s.testMode ? 'test ads' : 'LIVE ads'} · rewarded ${s.rewardedReady ? 'ready' : 'loading'} · interstitial ${s.interstitialReady ? 'ready' : 'loading'} · ${s.completedSinceInterstitial} of ${c.everyCompletedLevels} levels since the last one`;
 }
 
 function solutionNote() {
@@ -593,6 +678,7 @@ function summariseLog() {
   for (const e of loadLog()) {
     if (!byLevel.has(e.level)) byLevel.set(e.level, { tries: 0, won: 0, timeUp: 0, restarts: 0, best: null });
     const r = byLevel.get(e.level);
+    if (e.result === 'extra-time') continue;
     r.tries++;
     if (e.result === 'won') {
       r.won++;
@@ -616,6 +702,7 @@ function start(data = {}) {
     last = t;
     requestAnimationFrame(frame);
   });
+  startAds().catch(() => {});
 }
 
 const hot = window.claude?.hot;
@@ -624,4 +711,4 @@ if (hot?.ready) hot.ready(start);
 else start(hot?.data ?? {});
 
 // For automated checks and debugging in the browser console.
-window.__mmr = { game, play, showHome, restart, LEVELS, view };
+window.__mmr = { game, play, showHome, restart, LEVELS, view, ads };

@@ -1,7 +1,7 @@
 // Saved settings, best results and the playtest log. Browser storage can be missing
 // (private windows, blocked storage), so every access is guarded and has a default.
 
-const KEYS = { settings: 'mmr-settings', progress: 'mmr-progress', log: 'mmr-log' };
+const KEYS = { settings: 'mmr-settings', progress: 'mmr-progress', log: 'mmr-log', ads: 'mmr-ads' };
 
 function read(key, fallback) {
   try {
@@ -60,3 +60,9 @@ export function appendLog(entry) {
 export function clearLog() {
   write(KEYS.log, []);
 }
+
+// Ad counters and the cached remote ad config (see ads.js), as a small key-value store.
+export const adStore = {
+  get: (k) => read(KEYS.ads, {})[k],
+  set: (k, v) => write(KEYS.ads, { ...read(KEYS.ads, {}), [k]: v }),
+};
