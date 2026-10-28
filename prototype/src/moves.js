@@ -2,7 +2,7 @@
 // every marble has stopped, then let go. The hint tables in prototype/hints/ were built with
 // exactly this function, so the game and the tools must share it.
 
-import { stepSim, isWon } from './sim.js';
+import { stepSim, isWon, isLost } from './sim.js';
 import { createTilt, updateTilt, gravityInMachine, directionVector } from './tilt.js';
 import { SIM_DT } from './config.js';
 
@@ -18,8 +18,8 @@ export function cloneSim(sim) {
   };
 }
 
-// A position: where each marble is, to a tenth of a block.
-export const stateKey = (sim) => sim.marbles.map((m) => (m.delivered ? 'D' : `${m.edge}:${Math.round(m.s * 10)}`)).join('|');
+// A position: where each marble is, to a tenth of a block (D home, L lost).
+export const stateKey = (sim) => sim.marbles.map((m) => (m.delivered ? 'D' : m.lost ? 'L' : `${m.edge}:${Math.round(m.s * 10)}`)).join('|');
 // Everything has stopped: no marble moved more than a hair in the last tenth of a second.
 // (Positions, not speeds: two marbles pressed together in a curve jiggle forever.)
 function settleWatch(sim) {
@@ -28,7 +28,7 @@ function settleWatch(sim) {
   return (dt) => {
     since += dt;
     if (since < 0.1) return false;
-    const moved = sim.marbles.some((m, i) => !m.delivered && Math.hypot(m.pos[0] - mark[i][0], m.pos[1] - mark[i][1], m.pos[2] - mark[i][2]) > 0.02);
+    const moved = sim.marbles.some((m, i) => !m.delivered && !m.lost && Math.hypot(m.pos[0] - mark[i][0], m.pos[1] - mark[i][1], m.pos[2] - mark[i][2]) > 0.02);
     mark = sim.marbles.map((m) => [...m.pos]);
     since = 0;
     return !moved;
@@ -55,6 +55,7 @@ export function macro(sim, dir) {
       won = true;
       break;
     }
+    if (isLost(s)) return { sim: s, won: false, lost: true, hold: t, time: t };
     if (settled(SIM_DT) && t > 0.3) {
       calm = true;
       break;
@@ -77,6 +78,7 @@ export function macro(sim, dir) {
         won = true;
         break;
       }
+      if (isLost(s)) return { sim: s, won: false, lost: true, hold, time: t };
       if (settled(SIM_DT) && Math.hypot(...tilt.current) < 0.005) break;
     }
   }

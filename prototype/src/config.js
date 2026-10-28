@@ -15,6 +15,9 @@ export const PHYSICS = {
   rejectSpeed: 1.6,     // speed a marble is pushed back with when it enters the wrong colour's goal.
   turnBias: 0.05,       // at a T-junction, how much a turn is preferred over going straight (in sin of tilt).
   junctionReach: 0.22,  // a marble this close to a T-junction's centre is in its open square and can roll into any branch.
+  liftSpeed: 1.6,       // blocks/s a stairway carries a marble up, whatever the tilt.
+  skyStallSpeed: 0.5,   // on a sky rail, slower than this counts as stopping...
+  skyStallTime: 0.25,   // ...and stopping this long over the gap makes the marble fall.
 };
 
 export const CONTROLS = {

@@ -3,7 +3,7 @@
 
 import { SIM_DT } from './config.js';
 import { buildTrack } from './track.js';
-import { createSim, stepSim, isWon } from './sim.js';
+import { createSim, stepSim, isWon, isLost } from './sim.js';
 import { createTilt, updateTilt, gravityInMachine, directionVector } from './tilt.js';
 
 // solution: list of [direction, seconds] or [direction, seconds, amount],
@@ -27,6 +27,7 @@ export function replay(level, solution = level.solution, { maxTime = 120, onStep
       t += SIM_DT;
       if (onStep) onStep(sim, t, tilt);
       if (isWon(sim)) return { won: true, time: t, errors: [], sim, events };
+      if (isLost(sim)) return { won: false, lost: true, time: t, errors: [], sim, events };
       if (t >= maxTime) return { won: false, time: t, errors: [], sim, events };
     }
   }

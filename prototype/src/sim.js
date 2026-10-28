@@ -3,7 +3,9 @@
 // A marble only stores which edge it is on, how far along it is (s) and its signed
 // speed along that edge (v). Each step, gravity is projected onto the groove's
 // direction, drag is applied, and the marble slides along the line, crossing nodes
-// into the next edge. Plates, gates and goals are just checks on those numbers.
+// into the next edge. Plates, gates, filters and goals are just checks on those numbers.
+// A stairway sets the speed instead of gravity; a marble that stops on a sky rail falls,
+// onto a groove below or out of the game (lost).
 
 import { PHYSICS, MARBLE_RADIUS } from './config.js';
 import { sampleEdge, tangentAwayFrom, dot, sub, len, scale } from './track.js';
@@ -18,6 +20,8 @@ export function createSim(track) {
     s: st.s,
     v: 0,
     delivered: false,
+    lost: false, // fell off a sky rail with nothing below: the level can't be won any more
+    stall: 0, // seconds spent (nearly) stopped on a sky rail
     pull: null, // extra gravity for this marble only (Magnetic Pull), machine coordinates
     pos: sampleEdge(track.edges[st.edge], st.s).pos,
     tangent: [1, 0, 0],
@@ -29,6 +33,7 @@ export function createSim(track) {
     goals: track.goals.map((g) => ({ ...g, filled: false })),
     plates: track.plates.map((p) => ({ ...p, pressed: false })),
     gates: track.gates.map((g) => ({ ...g, open: false, powered: false, forced: false })),
+    filters: track.filters || [],
     speedScale: 1, // Speed Boost: multiplies how hard gravity pushes along grooves, and the speed cap
     time: 0,
   };
@@ -38,6 +43,10 @@ export function createSim(track) {
 
 export function isWon(sim) {
   return sim.marbles.length > 0 && sim.marbles.every((m) => m.delivered);
+}
+
+export function isLost(sim) {
+  return sim.marbles.some((m) => m.lost);
 }
 
 // Advance the simulation by dt seconds with gravity g (machine coordinates).
@@ -50,8 +59,16 @@ export function stepSim(sim, dt, g) {
   const boost = sim.speedScale || 1;
 
   for (const m of sim.marbles) {
-    if (m.delivered) continue;
+    if (m.delivered || m.lost) continue;
     const edge = sim.track.edges[m.edge];
+    if (edge.lift) {
+      // A stairway: the marble climbs at a steady pace whatever the tilt.
+      m.v = PHYSICS.liftSpeed * edge.lift;
+      const before = { edge: m.edge, s: m.s };
+      moveAlong(sim, m, m.v * dt, g, events);
+      blockAtGates(sim, m, before, events);
+      continue;
+    }
     const { tangent } = sampleEdge(edge, m.s);
     const gm = m.pull ? [g[0] + m.pull[0], g[1] + m.pull[1], g[2] + m.pull[2]] : g;
     const a = (roll * dot(gm, tangent) + junctionPull(sim, m, edge, gm)) * boost;
@@ -74,8 +91,10 @@ export function stepSim(sim, dt, g) {
   }
 
   for (let pass = 0; pass < 2; pass++) collideMarbles(sim, events);
+  for (const m of sim.marbles) if (!m.delivered && !m.lost) watchSky(sim, m, dt, events);
 
   for (const m of sim.marbles) {
+    if (m.lost) continue;
     const { pos, tangent } = sampleEdge(sim.track.edges[m.edge], m.s);
     m.distance += len(sub(pos, m.pos));
     m.pos = pos;
@@ -181,20 +200,82 @@ function chooseExit(sim, node, fromEdge, arriving, speed, g) {
   return best || (speed > 0 ? straightOn : null);
 }
 
-// A closed gate is a wall across its groove.
-function blockAtGates(sim, m, before, events) {
-  if (m.edge !== before.edge) return;
-  for (const gate of sim.gates) {
-    if (gate.open || gate.edge !== m.edge) continue;
-    const side = Math.sign(before.s - gate.s) || -Math.sign(m.v) || 1;
-    const crossed = Math.sign(m.s - gate.s) !== side;
-    if (crossed || Math.abs(m.s - gate.s) < R) {
-      m.s = gate.s + side * R;
-      if (Math.sign(m.v) === -side) {
-        if (Math.abs(m.v) > 0.3) events.push({ type: 'bump', marble: m.id, strength: Math.abs(m.v) });
-        m.v = -m.v * PHYSICS.wallBounce;
+// A marble that stops on a sky rail falls: onto the groove under it if there is one, and
+// otherwise out of the game.
+function watchSky(sim, m, dt, events) {
+  if (!sim.track.edges[m.edge].sky || Math.abs(m.v) >= PHYSICS.skyStallSpeed) {
+    m.stall = 0;
+    return;
+  }
+  m.stall += dt;
+  if (m.stall < PHYSICS.skyStallTime) return;
+  m.stall = 0;
+  const landing = landingBelow(sim.track, sampleEdge(sim.track.edges[m.edge], m.s).pos);
+  if (!landing) {
+    m.lost = true;
+    m.v = 0;
+    events.push({ type: 'fall', marble: m.id, color: m.color });
+    return;
+  }
+  m.edge = landing.edge;
+  m.s = landing.s;
+  m.v = 0;
+  events.push({ type: 'drop', marble: m.id, strength: 2 });
+}
+
+// The groove a marble at `pos` lands in if it drops straight down: the first piece under
+// it, if that piece has grooves (the nearest point of them). A plain block or the ground
+// means the marble is lost.
+export function landingBelow(track, pos) {
+  const x = Math.floor(pos[0]);
+  const z = Math.floor(pos[2]);
+  for (let y = Math.floor(pos[1]) - 1; y >= 0; y--) {
+    const owner = track.cellOwner?.get(`${x},${y},${z}`);
+    if (owner === undefined) continue;
+    const piece = track.pieces[owner];
+    let best = null;
+    for (const id of piece.edges) {
+      const edge = track.edges[id];
+      if (edge.sky) continue;
+      for (let i = 1; i < edge.pts.length; i++) {
+        const a = edge.pts[i - 1];
+        const b = edge.pts[i];
+        const d = [b[0] - a[0], b[2] - a[2]];
+        const l2 = d[0] * d[0] + d[1] * d[1];
+        const t = l2 ? Math.max(0, Math.min(1, ((pos[0] - a[0]) * d[0] + (pos[2] - a[2]) * d[1]) / l2)) : 0;
+        const q = [a[0] + d[0] * t, a[1] + (b[1] - a[1]) * t, a[2] + d[1] * t];
+        // Only grooves at the height of this cell's top count (not a whirl's inner drop).
+        if (q[1] < y + 0.5) continue;
+        const dist = Math.hypot(pos[0] - q[0], pos[2] - q[2]);
+        if (!best || dist < best.dist) best = { edge: id, s: edge.cum[i - 1] + t * (edge.cum[i] - edge.cum[i - 1]), dist };
       }
     }
+    return best && best.dist < 0.45 ? best : null;
+  }
+  return null;
+}
+
+// A closed gate is a wall across its groove, and so is a filter for marbles of other colours.
+function blockAtGates(sim, m, before, events) {
+  if (m.edge !== before.edge) return;
+  for (const f of sim.filters) {
+    if (f.edge !== m.edge || f.color === m.color) continue;
+    wall(m, before, f.s, events);
+  }
+  for (const gate of sim.gates) {
+    if (gate.open || gate.edge !== m.edge) continue;
+    wall(m, before, gate.s, events);
+  }
+}
+
+function wall(m, before, at, events) {
+  const side = Math.sign(before.s - at) || -Math.sign(m.v) || 1;
+  const crossed = Math.sign(m.s - at) !== side;
+  if (!crossed && Math.abs(m.s - at) >= R) return;
+  m.s = at + side * R;
+  if (Math.sign(m.v) === -side) {
+    if (Math.abs(m.v) > 0.3) events.push({ type: 'bump', marble: m.id, strength: Math.abs(m.v) });
+    m.v = -m.v * PHYSICS.wallBounce;
   }
 }
 
@@ -206,6 +287,7 @@ function collideMarbles(sim, events) {
     for (let j = i + 1; j < ms.length; j++) {
       const A = ms[i];
       const B = ms[j];
+      if (A.lost || B.lost) continue;
       const pa = sampleEdge(sim.track.edges[A.edge], A.s);
       const pb = sampleEdge(sim.track.edges[B.edge], B.s);
       const d = sub(pb.pos, pa.pos);
@@ -244,7 +326,7 @@ function checkGoals(sim, events) {
     if (goal.filled) continue;
     const edge = sim.track.edges[goal.edge];
     for (const m of sim.marbles) {
-      if (m.delivered || m.edge !== goal.edge || m.s < edge.L - 0.02) continue;
+      if (m.delivered || m.lost || m.edge !== goal.edge || m.s < edge.L - 0.02) continue;
       if (m.color === goal.color) {
         m.delivered = true;
         m.v = 0;
@@ -264,7 +346,7 @@ function checkGoals(sim, events) {
 function updateMechanisms(sim, events) {
   for (const plate of sim.plates) {
     const was = plate.pressed;
-    plate.pressed = sim.marbles.some((m) => m.edge === plate.edge && m.s >= plate.from);
+    plate.pressed = sim.marbles.some((m) => !m.lost && m.edge === plate.edge && m.s >= plate.from);
     if (plate.pressed !== was) events.push({ type: plate.pressed ? 'platePress' : 'plateRelease', link: plate.link });
   }
   for (const gate of sim.gates) {

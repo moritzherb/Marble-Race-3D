@@ -2,8 +2,8 @@
 // physics uses, so what you see is exactly what the marbles ride on.
 
 import * as THREE from './three.js';
-import { RAIL_Y, pieceCells } from './pieces.js';
-import { sampleEdge } from './track.js';
+import { RAIL_Y, pieceCells, WHIRL_HOLE_Y } from './pieces.js';
+import { sampleEdge, tangentAwayFrom } from './track.js';
 import { machineRotation, directionVector } from './tilt.js';
 
 export const MARBLE_COLORS = {
@@ -14,6 +14,8 @@ export const MARBLE_COLORS = {
   red: 0xe0453a,
 };
 const LINK_COLORS = { A: 0xc9a23a, B: 0x5d6470, C: 0xb0b8c4 };
+const PORTAL_COLORS = { 1: [0xb44cff, '#f3c6ff', '#7a1fd1'], 2: [0x1fc8e0, '#c8fbff', '#0a8ea8'] };
+const STEPS = 4; // treads on a stairway
 // Plate faces per link: light centre, rim, and the dark bullseye lines.
 const PLATE_FACES = { A: ['#f6d977', '#c9962b', '#6b4a10'], B: ['#b3bcc8', '#6b7380', '#262b33'], C: ['#f1f4f8', '#b8c0cb', '#59626e'] };
 
@@ -150,6 +152,62 @@ function shutterTexture() {
   return tex;
 }
 
+// The swirl inside a portal ring: spiral arms on a glowing disc.
+function swirlTexture(light, dark) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(128, 128, 4, 128, 128, 128);
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(0.35, light);
+  grad.addColorStop(1, dark);
+  g.fillStyle = grad;
+  g.beginPath();
+  g.arc(128, 128, 128, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.75)';
+  g.lineCap = 'round';
+  for (let arm = 0; arm < 3; arm++) {
+    g.lineWidth = 10;
+    g.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const k = i / 40;
+      const a = (arm * 2 * Math.PI) / 3 + k * 3.4;
+      const r = 12 + k * 108;
+      const x = 128 + r * Math.cos(a);
+      const y = 128 + r * Math.sin(a);
+      if (i === 0) g.moveTo(x, y);
+      else g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// A whirl's funnel as drawn: shallower than the spiral the marble really follows (that one
+// is steep so the funnel stays one-way), so the steep camera can see into it. Height of the
+// funnel's floor at radius r from the middle of a whirl whose top tier is y.
+const FUNNEL_RIM = 0.44;
+const FUNNEL_HOLE = 0.5; // the hole's height above the tier's floor, as drawn
+function funnelFloor(r, y) {
+  const rim = y + RAIL_Y + FLOOR;
+  const k = Math.min(1, Math.max(0, (r - 0.15) / (FUNNEL_RIM - 0.15)));
+  return rim - (rim - (y + FUNNEL_HOLE)) * (1 - k) ** 1.4;
+}
+
+// How high a marble is on a stairway, as a fraction of the climb, `frac` of the way along:
+// it rides each tread, then hops up to the next.
+function stairRise(frac) {
+  const k = Math.min(STEPS - 1e-6, Math.max(0, frac * STEPS));
+  const tread = Math.floor(k);
+  const f = k - tread;
+  if (tread >= STEPS - 1 || f < 0.62) return Math.min(tread, STEPS - 1) / (STEPS - 1);
+  const h = (f - 0.62) / 0.38;
+  return (tread + h) / (STEPS - 1) + 0.1 * Math.sin(Math.PI * h);
+}
+
 // A soft studio environment for reflections on the glass marbles.
 function studioEnvironment(renderer) {
   const scene = new THREE.Scene();
@@ -247,11 +305,28 @@ function tunnelShadeGeometry() {
 // sides start (the block's floor, or the top of a tunnel arch underneath).
 function carvePiece(track, piece, base) {
   const segs = [];
-  for (const id of piece.edges) {
-    const pts = track.edges[id].pts;
-    for (let i = 0; i < pts.length - 1; i++) segs.push([pts[i][0], pts[i][2], pts[i][1], pts[i + 1][0], pts[i + 1][2], pts[i + 1][1]]);
+  // A whirl is a smooth funnel the marble circles down; only where a groove comes in over the
+  // rim is a channel cut (the drop and the exits are inside the block below).
+  let bowl = null;
+  if (piece.type === 'whirl') {
+    const [ax, ay, az] = piece.anchor;
+    // Every spiral, for the darker track painted along the funnel.
+    const track2d = piece.edges.slice(0, piece.opts.entries.length).flatMap((id) => {
+      const pts = track.edges[id].pts;
+      return pts.slice(1).map((p, i) => [pts[i][0], pts[i][2], p[0], p[2]]);
+    });
+    bowl = { x: ax + 0.5, y: ay, z: az + 0.5, top: ay + TOP, hole: ay + FUNNEL_HOLE, track2d };
   }
-  const cups = piece.type === 'goal' || piece.type === 'plate' ? piece.edges.map((id) => track.edges[id].pts.at(-1)) : [];
+  const edgeIds = bowl ? piece.edges.slice(0, piece.opts.entries.length) : piece.edges;
+  for (const id of edgeIds) {
+    const pts = track.edges[id].pts;
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (bowl && Math.hypot(pts[i + 1][0] - bowl.x, pts[i + 1][2] - bowl.z) < FUNNEL_RIM) continue;
+      segs.push([pts[i][0], pts[i][2], pts[i][1], pts[i + 1][0], pts[i + 1][2], pts[i + 1][1]]);
+    }
+  }
+  const stairs = piece.type === 'stairs';
+  const cups = ['goal', 'plate', 'portal'].includes(piece.type) ? piece.edges.map((id) => track.edges[id].pts.at(-1)) : [];
   const cells = pieceCells(piece.type, piece.anchor, piece.r).filter((c) => c[1] === piece.anchor[1]);
   const x0 = Math.min(...cells.map((c) => c[0])) + BLOCK_INSET;
   const x1 = Math.max(...cells.map((c) => c[0])) + 1 - BLOCK_INSET;
@@ -269,10 +344,31 @@ function carvePiece(track, piece, base) {
       const d = Math.hypot(x - ax - dx * t, z - az - dz * t);
       if (d < dist) {
         dist = d;
-        railY = ay + (by - ay) * t;
+        // A stairway's treads: flat steps instead of a slope.
+        railY = stairs ? ay + Math.min(STEPS - 1, Math.floor(t * STEPS)) / (STEPS - 1) : ay + (by - ay) * t;
       }
     }
     let cut = dist < CHANNEL_HALF ? Math.sqrt(1 - (dist / CHANNEL_HALF) ** 2) : 0;
+    if (bowl) {
+      // The funnel's floor at radius r is the groove floor of the spiral at that radius, so
+      // the marble rolls on it; it rises to the block top at the rim.
+      const r = Math.hypot(x - bowl.x, z - bowl.z);
+      const floor = funnelFloor(r, bowl.y);
+      const rim = Math.min(1, Math.max(0, (r - FUNNEL_RIM + 0.02) / 0.06));
+      const funnel = floor + (bowl.top - floor) * rim * rim * (3 - 2 * rim);
+      const groove = cut > 0 ? railY + RAIL_TO_TOP - CHANNEL_DEPTH * cut : Infinity;
+      const h = Math.min(funnel, groove);
+      let onTrack = Infinity;
+      for (const [ax, az, bx, bz] of bowl.track2d) {
+        const dx = bx - ax;
+        const dz = bz - az;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+        onTrack = Math.min(onTrack, Math.hypot(x - ax - dx * t, z - az - dz * t));
+      }
+      const depth = ((bowl.top - h) / (bowl.top - bowl.hole)) * 0.6;
+      const stripe = rim < 1 && onTrack < 0.075 ? 0.95 : 0;
+      return [h, Math.min(1, Math.max(cut, depth, stripe))];
+    }
     for (const c of cups) {
       const dc = Math.hypot(x - c[0], z - c[2]);
       const cup = dc <= CUP_FLAT ? 1 : dc < CUP_RADIUS ? Math.sqrt(1 - ((dc - CUP_FLAT) / (CUP_RADIUS - CUP_FLAT)) ** 2) : 0;
@@ -286,8 +382,9 @@ function carvePiece(track, piece, base) {
   const col = [];
   const uv = [];
   const index = [];
-  const nx = Math.max(2, Math.round((x1 - x0) * CARVE_STEPS));
-  const nz = Math.max(2, Math.round((z1 - z0) * CARVE_STEPS));
+  const steps = bowl ? 48 : stairs ? 40 : CARVE_STEPS;
+  const nx = Math.max(2, Math.round((x1 - x0) * steps));
+  const nz = Math.max(2, Math.round((z1 - z0) * steps));
   const e = 0.004;
   for (let j = 0; j <= nz; j++) {
     for (let i = 0; i <= nx; i++) {
@@ -459,7 +556,7 @@ export function createView(canvas) {
 
   // Which way a groove under this block runs, if the block should have a tunnel through it.
   function tunnelAxis(track, owner, piece) {
-    if (piece.type === 'ramp') return null;
+    if (piece.type === 'ramp' || piece.type === 'stairs' || piece.type === 'whirl') return null;
     const [x, y, z] = piece.anchor;
     const below = track.pieces[owner.get(`${x},${y - 1},${z}`)];
     if (!below || below === piece || !TUNNEL_UNDER.has(below.type)) return null;
@@ -473,9 +570,23 @@ export function createView(canvas) {
     const groups = new Map();
     const carved = woodMats.map(() => []);
     let n = 0;
+    const plainBlock = (cell, mat, r = 0) => {
+      const key = `c${mat}`;
+      if (!groups.has(key)) groups.set(key, { geo: cubeGeo, mat: woodMats[mat], list: [] });
+      const m = new THREE.Matrix4().makeRotationY((-r * Math.PI) / 2);
+      m.setPosition(cell[0] + 0.5, cell[1], cell[2] + 0.5);
+      groups.get(key).list.push(m);
+    };
     for (const piece of track.pieces) {
+      if (piece.type === 'sky' || piece.type === 'skyEnd') continue; // a beam, drawn by addSky
       const mat = (piece.anchor[0] * 7 + piece.anchor[1] * 3 + piece.anchor[2] * 5 + n++) % woodMats.length;
       const grooved = piece.edges.length > 0;
+      if (piece.type === 'whirl') {
+        // The funnel on top, and a plain block underneath that the marble drops into.
+        carved[mat].push(carvePiece(track, piece, piece.anchor[1]));
+        plainBlock([piece.anchor[0], piece.anchor[1] - 1, piece.anchor[2]], (mat + 1) % woodMats.length);
+        continue;
+      }
       const axis = tunnelAxis(track, owner, piece);
       if (axis) {
         const body = grooved ? archUnderCarvedGeo : archGeo;
@@ -494,11 +605,7 @@ export function createView(canvas) {
         carved[mat].push(carvePiece(track, piece, piece.anchor[1]));
         continue;
       }
-      const key = `c${mat}`;
-      if (!groups.has(key)) groups.set(key, { geo: cubeGeo, mat: woodMats[mat], list: [] });
-      const m = new THREE.Matrix4().makeRotationY((-piece.r * Math.PI) / 2);
-      m.setPosition(piece.anchor[0] + 0.5, piece.anchor[1], piece.anchor[2] + 0.5);
-      groups.get(key).list.push(m);
+      plainBlock(piece.anchor, mat, piece.r);
     }
     for (const { geo, mat, list } of groups.values()) {
       const mesh = new THREE.InstancedMesh(geo, mat, list.length);
@@ -531,6 +638,152 @@ export function createView(canvas) {
     knob.castShadow = true;
     content.add(post, knob);
     return { top: knob.position.clone(), mat };
+  }
+
+  // Colour filters: an arch of the marble's colour over the groove, and a stripe on its floor.
+  function addFilters(track) {
+    for (const f of track.filters || []) {
+      const { pos, tangent } = sampleEdge(track.edges[f.edge], f.s);
+      const color = MARBLE_COLORS[f.color] ?? 0xffffff;
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.15, emissive: color, emissiveIntensity: 0.35 });
+      const group = new THREE.Group();
+      group.position.set(pos[0], pos[1] + RAIL_TO_TOP, pos[2]);
+      group.lookAt(pos[0] + tangent[0], pos[1] + RAIL_TO_TOP, pos[2] + tangent[2]);
+      // A short arched hood of that colour over the groove: it reads from any side.
+      const shape = new THREE.Shape();
+      shape.moveTo(0.31, 0);
+      shape.absarc(0, 0, 0.31, 0, Math.PI, false);
+      shape.lineTo(-0.235, 0);
+      shape.absarc(0, 0, 0.235, Math.PI, 0, true);
+      shape.closePath();
+      const hoodGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.24, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3, curveSegments: 24 });
+      hoodGeo.translate(0, 0, -0.12);
+      const hood = new THREE.Mesh(hoodGeo, mat);
+      hood.castShadow = true;
+      const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.315, 0.018, 8, 28, Math.PI), white);
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.085, 18, 14), mat);
+      ball.position.y = 0.36;
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(2 * CHANNEL_HALF, 0.012, 0.1), mat);
+      stripe.position.y = -CHANNEL_DEPTH + 0.008;
+      group.add(hood, band, ball, stripe);
+      content.add(group);
+    }
+  }
+
+  // Portals: a glowing ring standing across the groove at the cell's centre, with a turning
+  // swirl inside. The two of a pair share a colour.
+  function addPortals(track) {
+    const list = [];
+    for (const piece of track.pieces) {
+      if (piece.type !== 'portal') continue;
+      const edge = track.edges[piece.edges[0]];
+      const { pos, tangent } = sampleEdge(edge, edge.L);
+      const [hex, light, dark] = PORTAL_COLORS[piece.opts.pair] || PORTAL_COLORS[1];
+      // A swirling vortex in a round cup, a glowing rim, and sparks circling above it.
+      const group = new THREE.Group();
+      group.position.set(pos[0], pos[1] + FLOOR, pos[2]);
+      const ringMat = new THREE.MeshStandardMaterial({ color: hex, metalness: 0.3, roughness: 0.3, emissive: hex, emissiveIntensity: 0.7 });
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(RIM_RADIUS + 0.01, 0.042, 12, 44), ringMat);
+      rim.rotation.x = -Math.PI / 2;
+      rim.position.y = RAIL_TO_TOP - FLOOR + 0.008;
+      rim.castShadow = true;
+      const swirlMat = new THREE.MeshBasicMaterial({ map: swirlTexture(light, dark), transparent: true, opacity: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(CUP_FLAT + 0.04, 40), swirlMat);
+      pad.rotation.x = -Math.PI / 2;
+      pad.position.y = 0.004;
+      const sparks = new THREE.Group();
+      sparks.position.y = rim.position.y + 0.07;
+      for (let k = 0; k < 3; k++) {
+        const spark = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        const a = (k * 2 * Math.PI) / 3;
+        spark.position.set(Math.cos(a) * (RIM_RADIUS + 0.01), 0, Math.sin(a) * (RIM_RADIUS + 0.01));
+        sparks.add(spark);
+      }
+      group.add(rim, pad, sparks);
+      content.add(group);
+      list.push({ swirl: sparks, pad, ringMat });
+    }
+    return list;
+  }
+
+  // Sky rails: a steel beam with a glowing magnet strip that the marbles hang from, held up
+  // by brackets on the blocks at its ends.
+  const BEAM_Y = MARBLE_LIFT + MARBLE_VIEW_R + 0.065; // above the rail line
+  function addSky(track) {
+    const steel = new THREE.MeshStandardMaterial({ color: 0x4d6496, metalness: 0.65, roughness: 0.35 });
+    const glow = new THREE.MeshStandardMaterial({ color: 0x9ff4ff, emissive: 0x39d4ff, emissiveIntensity: 1 });
+    const beam = (a, b, y, extra = 0) => {
+      const dx = b[0] - a[0];
+      const dz = b[2] - a[2];
+      const l = Math.hypot(dx, dz);
+      const len = l + extra;
+      const mx = a[0] + (dx / l) * (len / 2);
+      const mz = a[2] + (dz / l) * (len / 2);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.13), steel);
+      bar.position.set(mx, y, mz);
+      bar.rotation.y = Math.atan2(-dz, dx);
+      bar.castShadow = true;
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, 0.07), glow);
+      strip.position.set(mx, y - 0.05, mz);
+      strip.rotation.y = bar.rotation.y;
+      content.add(bar, strip);
+    };
+    for (const piece of track.pieces) {
+      if (piece.type !== 'sky' && piece.type !== 'skyEnd') continue;
+      const pts = track.edges[piece.edges[0]].pts;
+      beam(pts[0], pts.at(-1), pts[0][1] + BEAM_Y, piece.type === 'skyEnd' ? 0.12 : 0);
+      if (piece.type === 'skyEnd') {
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.1, 16), steel);
+        const e = pts.at(-1);
+        const t = sampleEdge(track.edges[piece.edges[0]], 1e9).tangent;
+        cap.position.set(e[0] + t[0] * 0.12, e[1] + BEAM_Y, e[2] + t[2] * 0.12);
+        content.add(cap);
+      }
+    }
+    // Where a sky rail meets a block: the beam reaches into the block, onto a bracket beside the groove.
+    for (const node of track.nodes) {
+      const skyLink = node.links.find((l) => track.edges[l.edge].sky);
+      const ground = node.links.find((l) => !track.edges[l.edge].sky);
+      if (!skyLink || !ground) continue;
+      const into = tangentAwayFrom(track.edges[ground.edge], ground.end);
+      const p = node.pos;
+      const y = p[1] + BEAM_Y;
+      beam(p, [p[0] + into[0], p[1], p[2] + into[2]], y, -0.62);
+      const side = [-into[2], 0, into[0]];
+      const at = [p[0] + into[0] * 0.3 + side[0] * 0.3, p[2] + into[2] * 0.3 + side[2] * 0.3];
+      const top = p[1] + RAIL_TO_TOP;
+      const h = y + 0.06 - top;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, h, 0.07), steel);
+      post.position.set(at[0], top + h / 2, at[1]);
+      post.castShadow = true;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.34), steel);
+      arm.position.set(at[0] - side[0] * 0.15, y + 0.06, at[1] - side[2] * 0.15);
+      arm.rotation.y = Math.atan2(-into[2], into[0]);
+      content.add(post, arm);
+    }
+  }
+
+  // Whirls: the dark hole at the bottom of the funnel, and a dark mouth on each side of the
+  // block underneath where a groove leads out.
+  function addWhirls(track) {
+    const dark = new THREE.MeshBasicMaterial({ color: 0x1c120a, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    const OUT = { E: [1, 0], W: [-1, 0], S: [0, 1], N: [0, -1] };
+    for (const piece of track.pieces) {
+      if (piece.type !== 'whirl') continue;
+      const [x, y, z] = piece.anchor;
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(0.135, 28), dark);
+      hole.rotation.x = -Math.PI / 2;
+      hole.position.set(x + 0.5, y + FUNNEL_HOLE + 0.004, z + 0.5);
+      content.add(hole);
+      for (const side of piece.opts.exits) {
+        const [dx, dz] = OUT[side];
+        const mouth = new THREE.Mesh(new THREE.CircleGeometry(TUNNEL_RADIUS - 0.02, 24, 0, Math.PI), dark);
+        mouth.position.set(x + 0.5 + dx * (0.5 - BLOCK_INSET + 0.003), y - 1 + RAIL_Y + FLOOR, z + 0.5 + dz * (0.5 - BLOCK_INSET + 0.003));
+        mouth.rotation.y = Math.atan2(dx, dz);
+        content.add(mouth);
+      }
+    }
   }
 
   function build(track) {
@@ -675,15 +928,26 @@ export function createView(canvas) {
       }
     });
 
+    addFilters(track);
+    const portals = addPortals(track);
+    addSky(track);
+    addWhirls(track);
+
     // Cells with a different block directly on top are tunnels: only there is a marble
-    // hidden from every angle, so only there does its outline show through the wood.
+    // hidden from every angle, so only there does its outline show through the wood. A sky
+    // rail overhead hides nothing; inside a whirl's drop and the block under it hides it too.
+    const isSky = (i) => i !== undefined && (track.pieces[i].type === 'sky' || track.pieces[i].type === 'skyEnd');
     const inTunnel = (pos) => {
       const x = Math.floor(pos[0]);
       const y = Math.floor(pos[1]);
       const z = Math.floor(pos[2]);
       const here = owner.get(`${x},${y},${z}`);
+      if (here !== undefined && track.pieces[here].type === 'whirl') {
+        const top = track.pieces[here].anchor[1];
+        return y < top || pos[1] - top < WHIRL_HOLE_Y + 0.02;
+      }
       const above = owner.get(`${x},${y + 1},${z}`);
-      return here !== undefined && above !== undefined && above !== here;
+      return here !== undefined && above !== undefined && above !== here && !isSky(above);
     };
 
     // Marbles, each with an outline twin that only draws when the marble is in a tunnel.
@@ -701,7 +965,7 @@ export function createView(canvas) {
       ghost.renderOrder = 10;
       ghost.scale.setScalar(1.08);
       content.add(mesh, ghost);
-      return { mesh, ghost, prev: new THREE.Vector3(), placed: false };
+      return { mesh, ghost, prev: new THREE.Vector3(), placed: false, simPos: null, lag: 0, lagV: 0, fallV: 0, pop: 0 };
     });
 
     // Light and shadow sized to the machine.
@@ -718,7 +982,7 @@ export function createView(canvas) {
     cam.far = size * 4;
     cam.updateProjectionMatrix();
 
-    current = { track, goals, plates, gates, cables, marbles, inTunnel, hint: null };
+    current = { track, goals, plates, gates, cables, marbles, portals, inTunnel, hint: null };
     fitCamera();
     view.distance = view.targetDistance;
   }
@@ -867,10 +1131,50 @@ export function createView(canvas) {
     const { axis, angle } = machineRotation(tiltVec);
     pivot.quaternion.setFromAxisAngle(tmpAxis.set(axis[0], axis[1], axis[2]).normalize(), angle);
 
+    if (current.sim !== sim) {
+      // A new attempt: forget the last one's falls and jumps.
+      current.sim = sim;
+      for (const vis of current.marbles) Object.assign(vis, { simPos: null, lag: 0, lagV: 0, fallV: 0, pop: 0 });
+    }
     sim.marbles.forEach((m, i) => {
       const vis = current.marbles[i];
+      if (m.lost) {
+        // Fell off a sky rail with nothing below: it drops out of sight.
+        vis.fallV += 9 * dt;
+        vis.mesh.position.y -= vis.fallV * dt;
+        vis.mesh.visible = vis.mesh.position.y > current.track.bounds.min[1] - 4;
+        vis.ghost.visible = false;
+        return;
+      }
+      vis.mesh.visible = true;
+      const edge = current.track.edges[m.edge];
+      let y = m.pos[1] + MARBLE_LIFT;
+      if (edge.lift) y += stairRise(m.s / edge.L) - m.s / edge.L; // up the treads, not the slope
+      if (edge.whirl) {
+        // On the funnel's drawn surface, sinking into the hole at the end.
+        const w = edge.whirl;
+        const r = Math.hypot(m.pos[0] - w.x, m.pos[2] - w.z);
+        y = Math.max(m.pos[1] + MARBLE_LIFT, funnelFloor(r, w.y) + MARBLE_VIEW_R - (r < 0.15 ? (0.15 - r) * 3 : 0));
+      }
+      // The simulation jumps when a marble drops off a sky rail or goes through a portal;
+      // the picture follows: a quick fall, or a pop out of the far portal.
+      if (vis.simPos) {
+        const horiz = Math.hypot(m.pos[0] - vis.simPos[0], m.pos[2] - vis.simPos[2]);
+        if (vis.simPos[1] - m.pos[1] > 0.45 && horiz < 0.3) {
+          vis.lag += vis.simPos[1] - m.pos[1];
+          vis.lagV = 0;
+        }
+        if (horiz > 0.6) vis.pop = 1;
+      }
+      vis.simPos = [...m.pos];
+      if (vis.lag > 0) {
+        vis.lagV += 14 * dt;
+        vis.lag = Math.max(0, vis.lag - vis.lagV * dt);
+      }
+      vis.pop = Math.max(0, vis.pop - dt * 3);
+      vis.mesh.scale.setScalar(1 + 0.45 * vis.pop);
       vis.prev.copy(vis.mesh.position);
-      vis.mesh.position.set(m.pos[0], m.pos[1] + MARBLE_LIFT, m.pos[2]);
+      vis.mesh.position.set(m.pos[0], y + vis.lag, m.pos[2]);
       const moved = vis.placed ? vis.mesh.position.distanceTo(vis.prev) : 0;
       vis.placed = true;
       if (moved > 1e-5 && moved < 1) {
@@ -885,6 +1189,10 @@ export function createView(canvas) {
       vis.ghost.visible = !m.delivered && current.inTunnel(m.pos);
     });
 
+    for (const p of current.portals) {
+      p.swirl.rotation.y -= dt * (reducedMotion ? 0.4 : 2.2);
+      p.pad.rotation.z += dt * (reducedMotion ? 0.4 : 2.4);
+    }
     const ease = (rate) => Math.min(1, dt * rate);
     sim.goals.forEach((g, i) => {
       const mat = current.goals[i].mat;

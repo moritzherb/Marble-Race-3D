@@ -4,7 +4,7 @@
 // become shared "nodes". A node with one edge is a dead end, two edges is a plain
 // connection, three or more is a junction.
 
-import { PIECES, toMachine, pieceCells, supportCells } from './pieces.js';
+import { PIECES, toMachine, pieceCells, supportCells, railsOf } from './pieces.js';
 
 const key3 = (p) => p.map((v) => Math.round(v * 1000)).join(',');
 const cellKey = (c) => c.join(',');
@@ -121,16 +121,27 @@ export function buildTrack(level) {
 
   // Wood on top of a groove hides the marble, so it must be a tunnel the player can see.
   // The renderer can only cut an arch through a block over a straight groove, so that is
-  // the only groove anything may sit on (and a ramp can't be the thing on top).
+  // the only groove anything may sit on (and a ramp, stairway or whirl can't be the thing
+  // on top). A sky rail is a beam in the air: it covers nothing, and nothing rests on it.
+  const SLOPED = new Set(['ramp', 'stairs']);
   for (const piece of placed) {
-    const def = PIECES[piece.type];
-    if (!def.rails.length) continue;
-    const surface = piece.type === 'ramp' ? pieceCells(piece.type, piece.anchor, piece.r).filter(([, y]) => y > piece.anchor[1]) : [piece.anchor];
+    if (!railsOf(piece.type, piece.opts).length) continue;
+    const cells = pieceCells(piece.type, piece.anchor, piece.r);
+    const surface = SLOPED.has(piece.type) ? cells.filter(([, y]) => y > piece.anchor[1]) : [piece.anchor];
     for (const [x, y, z] of surface) {
       const above = occupied.get(cellKey([x, y + 1, z]));
-      if (!above || above === piece) continue;
-      if (piece.type === 'straight' && above.type !== 'ramp') continue;
+      if (!above || above === piece || above.type === 'sky' || above.type === 'skyEnd') continue;
+      if (piece.type === 'sky' || piece.type === 'skyEnd') {
+        errors.push(`${above.label} rests on the sky rail at ${x},${y},${z}`);
+        continue;
+      }
+      if (piece.type === 'straight' && !SLOPED.has(above.type) && above.type !== 'whirl') continue;
       errors.push(`${above.label} covers the ${piece.type} at ${x},${y},${z}; only a straight groove can run under wood (as a tunnel)`);
+    }
+    if (piece.type === 'whirl') {
+      const [x, y, z] = piece.anchor;
+      const under = occupied.get(cellKey([x, y - 2, z]));
+      if (under && railsOf(under.type, under.opts).length) errors.push(`${piece.label} sits on the ${under.type} at ${x},${y - 2},${z}; a whirl needs a plain block or the ground under it`);
     }
   }
 
@@ -154,7 +165,7 @@ export function buildTrack(level) {
 
   for (const piece of placed) {
     piece.edges = [];
-    for (const rail of PIECES[piece.type].rails) {
+    for (const rail of railsOf(piece.type, piece.opts)) {
       const pts = rail.map((p) => toMachine(p, piece.anchor, piece.r));
       const edge = makeEdge(edges.length, pts, piece.index);
       const a = nodeAt(pts[0]);
@@ -165,6 +176,41 @@ export function buildTrack(level) {
       b.links.push({ edge: edge.id, end: 1 });
       edges.push(edge);
       piece.edges.push(edge.id);
+    }
+  }
+
+  // Portals: the two of a pair share the node at their centres, so a marble that rolls into
+  // one carries on out of the other.
+  const portals = new Map();
+  for (const piece of placed) {
+    if (piece.type !== 'portal') continue;
+    const pair = piece.opts.pair || '1';
+    if (!portals.has(pair)) portals.set(pair, []);
+    portals.get(pair).push(piece);
+  }
+  for (const [pair, list] of portals) {
+    if (list.length !== 2) {
+      errors.push(`Portal pair ${pair} has ${list.length} portal${list.length === 1 ? '' : 's'}; it needs exactly 2`);
+      continue;
+    }
+    const [a, b] = list.map((p) => edges[p.edges[0]]);
+    const keep = nodes[a.n1];
+    const gone = nodes[b.n1];
+    for (const link of gone.links) keep.links.push(link);
+    gone.links = [];
+    b.n1 = keep.id;
+    keep.portal = pair;
+  }
+  for (const piece of placed) {
+    for (const id of piece.edges) {
+      if (piece.type === 'stairs') edges[id].lift = 1; // carries marbles towards its n1 end, the top
+      if (piece.type === 'sky' || piece.type === 'skyEnd') edges[id].sky = true;
+      if (piece.type === 'portal') edges[id].portal = piece.opts.pair || '1';
+    }
+    if (piece.type === 'whirl') {
+      // Its spirals, for the renderer: the marble is drawn on the funnel's surface.
+      const [x, y, z] = piece.anchor;
+      for (const id of piece.edges.slice(0, piece.opts.entries.length)) edges[id].whirl = { x: x + 0.5, y, z: z + 0.5 };
     }
   }
 
@@ -180,6 +226,7 @@ export function buildTrack(level) {
   const goals = [];
   const plates = [];
   const gates = [];
+  const filters = [];
   for (const piece of placed) {
     const feature = PIECES[piece.type].feature;
     if (!feature) continue;
@@ -190,6 +237,9 @@ export function buildTrack(level) {
       goals.push({ edge: edge.id, color: piece.opts.color, link, filled: false, piece: piece.index });
     } else if (feature.type === 'plate') {
       plates.push({ edge: edge.id, from: edge.L - 0.3, link, pressed: false, piece: piece.index });
+    } else if (feature.type === 'filter') {
+      if (!piece.opts.color) errors.push(`Filter ${piece.label} has no colour`);
+      filters.push({ edge: edge.id, s: edge.L / 2, color: piece.opts.color, piece: piece.index });
     } else if (feature.type === 'gate') {
       // A shutter (inverse gate) is the other way round: open until its link is powered.
       gates.push({ edge: edge.id, s: edge.L / 2, link, inverse: Boolean(piece.opts.inverse), open: false, piece: piece.index });
@@ -208,6 +258,7 @@ export function buildTrack(level) {
       return null;
     }
     const edge = edges[owner.edges[0]];
+    if (owner.type === 'sky' || owner.type === 'skyEnd') errors.push(`Marble ${m.color} starts on a sky rail, where it would fall`);
     const deadEnd = ['end', 'goal', 'plate'].includes(owner.type);
     const s = typeof m.s === 'number' ? m.s * edge.L : deadEnd ? edge.L : edge.L / 2;
     return { color: m.color, edge: edge.id, s };
@@ -229,5 +280,8 @@ export function buildTrack(level) {
     }
   }
 
-  return { pieces: placed, edges, nodes, goals, plates, gates, starts, bounds: { min, max }, errors };
+  // Which piece fills each cell (for marbles dropping off a sky rail, and the renderer).
+  const cellOwner = new Map([...occupied].map(([k, piece]) => [k, piece.index]));
+
+  return { pieces: placed, edges, nodes, goals, plates, gates, filters, starts, cellOwner, bounds: { min, max }, errors };
 }

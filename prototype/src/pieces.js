@@ -62,11 +62,12 @@ export const PIECES = {
     rails: [line([0, Y, 0], [-H, Y, 0]), line([0, Y, 0], [H, Y, 0]), line([0, Y, 0], [0, Y, -H])],
   },
   cross: {
-    // two grooves crossing; marbles go straight through
+    // two grooves crossing in an open square: a four-way junction, so a marble can turn
+    // here (it goes straight on unless the tilt says otherwise)
     label: 'Crossing',
     shape: 'cube',
     cells: [[0, 0, 0]],
-    rails: [line([-H, Y, 0], [H, Y, 0]), line([0, Y, -H], [0, Y, H])],
+    rails: [line([0, Y, 0], [-H, Y, 0]), line([0, Y, 0], [H, Y, 0]), line([0, Y, 0], [0, Y, -H]), line([0, Y, 0], [0, Y, H])],
   },
   end: {
     // open to the west, closed towards the east
@@ -96,6 +97,44 @@ export const PIECES = {
     rails: [line([-H, Y, 0], [H, Y, 0])],
     feature: { type: 'gate' },
   },
+  filter: {
+    // a coloured arch over a straight groove: only the marble of that colour (opts.color)
+    // gets through; the others bounce off it as if it were a gate
+    label: 'Colour filter',
+    shape: 'cube',
+    cells: [[0, 0, 0]],
+    rails: [line([-H, Y, 0], [H, Y, 0])],
+    feature: { type: 'filter' },
+  },
+  portal: {
+    // a groove from the west face into a ring at the centre. A marble that rolls into it
+    // comes out of the other portal of the same pair (opts.pair), moving away from it.
+    label: 'Portal',
+    shape: 'cube',
+    cells: [[0, 0, 0]],
+    rails: [line([-H, Y, 0], [0, Y, 0])],
+    feature: { type: 'portal' },
+  },
+  sky: {
+    // a magnetic rail with nothing underneath: the marble hangs from a beam. It falls if it
+    // stops over the gap: onto a groove below if there is one, otherwise out of the game.
+    label: 'Sky rail',
+    shape: 'sky',
+    cells: [[0, 0, 0]],
+    supportCells: [],
+    rails: [line([-H, Y, 0], [H, Y, 0])],
+    feature: { type: 'sky' },
+  },
+  skyEnd: {
+    // the end of a sky rail, open to the west: a marble that rolls to the end stops over the
+    // middle of the cell and drops
+    label: 'Sky rail end',
+    shape: 'sky',
+    cells: [[0, 0, 0]],
+    supportCells: [],
+    rails: [line([-H, Y, 0], [0, Y, 0])],
+    feature: { type: 'sky' },
+  },
   ramp: {
     // high end on the west face one tier up, low end two cells east on the anchor's tier.
     // Slope 1:2 (26.6°) is steeper than the max tilt, so a ramp only works downhill.
@@ -105,6 +144,70 @@ export const PIECES = {
     supportCells: [[0, 0, 0], [1, 0, 0]],
     rails: [line([-H, Y + 1, 0], [1.5, Y, 0])],
   },
+  stairs: {
+    // a stairway that carries marbles up: low end on the west face of the anchor's tier,
+    // high end on the east face of the second cell one tier up. Whatever the tilt, a marble
+    // on it climbs at a steady pace; one arriving from the top is pushed back out.
+    label: 'Stairway',
+    shape: 'stairs',
+    cells: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]],
+    supportCells: [[0, 0, 0], [1, 0, 0]],
+    rails: [line([-H, Y, 0], [1.5, Y + 1, 0])],
+    feature: { type: 'lift' },
+  },
+  whirl: {
+    // a funnel: grooves come in at the rim from the sides in opts.entries, spiral down into
+    // a hole in the middle, and the marble drops into the block below (the anchor's tier
+    // minus one), leaving through the sides in opts.exits. Sides are machine directions.
+    label: 'Whirl',
+    shape: 'whirl',
+    cells: [[0, 0, 0], [0, -1, 0]],
+    supportCells: [[0, -1, 0]],
+    rails: (opts) => whirlRails(opts),
+    feature: { type: 'whirl' },
+  },
+};
+
+// The whirl's grooves: a spiral from each entry down to the hole, a short drop, and a groove
+// from the bottom of the drop out of each exit. One-way: the spirals are steeper than any tilt.
+const SIDE_ANGLE = { E: 0, S: 90, W: 180, N: 270 }; // around the cell centre, x east and z south
+const SIDE_POINT = { E: [H, 0], S: [0, H], W: [-H, 0], N: [0, -H] };
+export const WHIRL_HOLE_Y = 0.22;
+function whirlRails({ entries = 'W', exits = 'E' } = {}) {
+  const rails = [];
+  const hole = [0, WHIRL_HOLE_Y, 0];
+  for (const side of entries) {
+    const a0 = (SIDE_ANGLE[side] * Math.PI) / 180;
+    // Three quarters of a turn, closing in from the rim to near the middle, dropping at an
+    // even slope (about 25 degrees, steeper than the steepest tilt).
+    const flat = [];
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+      const k = i / steps;
+      const a = a0 + 1.5 * Math.PI * k;
+      const r = 0.1 + 0.4 * (1 - k) ** 2; // in from the rim quickly, then circling the hole
+      flat.push([r * Math.cos(a), r * Math.sin(a)]);
+    }
+    flat.push([0, 0]);
+    const along = [0];
+    for (let i = 1; i < flat.length; i++) along.push(along[i - 1] + Math.hypot(flat[i][0] - flat[i - 1][0], flat[i][1] - flat[i - 1][1]));
+    const total = along.at(-1);
+    const pts = flat.map(([x, z], i) => [x, Y - (Y - WHIRL_HOLE_Y) * (along[i] / total), z]);
+    pts[pts.length - 1] = hole;
+    rails.push(pts);
+  }
+  const bottom = [0, Y - 1, 0];
+  rails.push([hole, bottom]);
+  for (const side of exits) {
+    const [x, z] = SIDE_POINT[side];
+    rails.push([bottom, [x, Y - 1, z]]);
+  }
+  return rails;
+}
+
+export const railsOf = (type, opts = {}) => {
+  const rails = PIECES[type].rails;
+  return typeof rails === 'function' ? rails(opts) : rails;
 };
 
 // Rotate a local (x, z) offset by r quarter turns (east -> south -> west -> north).
