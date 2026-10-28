@@ -809,6 +809,28 @@ export function createView(canvas) {
         h.group.position.y = current.track.bounds.max[1] + 0.5 + (reducedMotion ? 0 : 0.06 * Math.sin(clock * 4));
       }
     }
+    // Magnetic Pull: a soft gold ring around the chosen marble, with a slow ripple.
+    sim.marbles.forEach((m, i) => {
+      const vis = current.marbles[i];
+      if (m.magnet && !vis.halo) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(MARBLE_VIEW_R + 0.13, 0.035, 8, 48), new THREE.MeshBasicMaterial({ color: 0xffc23d, transparent: true, opacity: 0.95, depthTest: false }));
+        const ripple = new THREE.Mesh(ring.geometry, new THREE.MeshBasicMaterial({ color: 0xfff1c2, transparent: true, opacity: 0.6, depthTest: false }));
+        ring.rotation.x = ripple.rotation.x = Math.PI / 2;
+        ring.renderOrder = ripple.renderOrder = 15;
+        vis.halo = { ring, ripple };
+        content.add(ring, ripple);
+      }
+      if (!vis.halo) return;
+      vis.halo.ring.visible = vis.halo.ripple.visible = Boolean(m.magnet);
+      if (!m.magnet) return;
+      const p = vis.mesh.position;
+      vis.halo.ring.position.set(p.x, p.y, p.z);
+      vis.halo.ripple.position.copy(vis.halo.ring.position);
+      const phase = reducedMotion ? 0.3 : (clock * 0.9) % 1;
+      vis.halo.ripple.scale.setScalar(1 + phase * 1.3);
+      vis.halo.ripple.material.opacity = 0.65 * (1 - phase);
+    });
+
     // Speed Boost: a warm glow on every marble while it runs.
     const boosted = (sim.speedScale || 1) > 1;
     sim.marbles.forEach((m, i) => {

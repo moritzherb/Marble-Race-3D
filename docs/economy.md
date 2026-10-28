@@ -232,7 +232,7 @@ The card's options, in order:
 
 **How the pull works:**
 
-- **Strength:** a pull equal to 45% of a full tilt. It's added to the tilt for that marble only, so the player's own tilt can overpower it.
+- **Strength:** a pull equal to 60% of a full tilt (about 2 blocks a second on a level machine). It's added to the tilt for that marble only, so the player's own tilt can overpower it.
 - **Which way:** it follows the shortest route through the track that a marble can actually take. That route goes only through open gates and only down ramps.
 - **Near a junction:** the pull points along the route's next branch, so the marble turns the right way.
 

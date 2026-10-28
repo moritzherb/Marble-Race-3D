@@ -22,11 +22,13 @@ const REASONS = {
   active: () => 'Already running.',
   'not now': () => 'Only while a level is being played.',
   locked: () => `Unlocks at level ${ECONOMY.powerUps.unlockLevel}.`,
+  saved: () => 'A checkpoint is saved. If you lose this attempt, you can carry on from it.',
 };
 
 export function createPowerBar({ bar, tag, powerups, player, context, use, coinIcon }) {
   let armed = null;
   let timer = null;
+  let onCustomClick = null;
   const list = () => powerups.list();
   const find = (id) => list().find((p) => p.id === id);
 
@@ -71,6 +73,7 @@ export function createPowerBar({ bar, tag, powerups, player, context, use, coinI
 
   function disarm() {
     armed = null;
+    onCustomClick = null;
     clearTimeout(timer);
     tag.hidden = true;
     for (const b of bar.querySelectorAll('.pu')) b.classList.remove('armed');
@@ -84,7 +87,8 @@ export function createPowerBar({ bar, tag, powerups, player, context, use, coinI
   }
 
   // Custom tag content (the marble picker for Magnetic Pull).
-  function custom(html, ms = 8000) {
+  function custom(html, ms = 8000, onClick = null) {
+    onCustomClick = onClick;
     tag.innerHTML = html;
     tag.hidden = false;
     clearTimeout(timer);
@@ -126,6 +130,7 @@ export function createPowerBar({ bar, tag, powerups, player, context, use, coinI
     } else arm(id);
   });
   tag.addEventListener('click', (e) => {
+    if (onCustomClick) return onCustomClick(e);
     const b = e.target.closest('[data-use]');
     if (!b || b.disabled) return;
     const id = b.dataset.use;

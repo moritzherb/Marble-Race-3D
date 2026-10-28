@@ -150,3 +150,153 @@ test('every price, limit and duration comes from economy.js', () => {
     assert.ok(p.cost > 0 && p.perAttempt > 0 && p.name && p.about, p.id);
   }
 });
+
+// ---------- Magnetic Pull ----------
+
+import { routeFor } from '../src/route.js';
+import { snapshotOf, restoreInto } from '../src/powerups.js';
+
+const LEVEL = [0, -30, 0]; // gravity with the machine level: nothing rolls by itself
+function run(sim, powerups, seconds, g = LEVEL) {
+  for (let t = 0; t < seconds; t += SIM_DT) {
+    powerups.tick(SIM_DT, sim);
+    stepSim(sim, SIM_DT, g);
+  }
+}
+
+test('Magnetic Pull brings a marble along a straight and round a curve to its goal, then stops', () => {
+  // Level 1: blue's groove runs east, curves, and runs north to its goal.
+  const { player, powerups, sim, ctx } = setup('first-tilt');
+  assert.ok(routeFor(sim, sim.marbles[0]).length > 3);
+  assert.deepEqual(powerups.activate('magnet', ctx, { marble: 0 }), { ok: true });
+  assert.equal(player.coins(), 40);
+  run(sim, powerups, 5);
+  assert.equal(sim.marbles[0].delivered, true, 'pulled home with the machine level');
+  assert.equal(isWon(sim), true);
+  assert.equal(powerups.effect('magnet'), null, 'ends once the marble is home');
+});
+
+test('Magnetic Pull only moves the chosen marble', () => {
+  const { powerups, sim, ctx } = setup('two-grooves');
+  const other = sim.marbles[1];
+  const before = other.s;
+  assert.equal(powerups.activate('magnet', ctx, { marble: 0 }).ok, true);
+  run(sim, powerups, 1);
+  assert.equal(other.s, before);
+  assert.equal(other.pull, null);
+});
+
+test('Magnetic Pull is refused, free of charge, behind a closed gate, uphill, for a delivered marble, or too far', () => {
+  // Level 5, Counterweight: orange's way home runs through a gate that starts closed.
+  const { player, powerups, sim, ctx } = setup('counterweight');
+  const orange = sim.marbles.findIndex((m) => m.color === 'orange');
+  stepSim(sim, SIM_DT, LEVEL);
+  assert.equal(powerups.activate('magnet', ctx, { marble: orange }).reason, 'no route');
+  // Level 4, Downhill Only: once a marble is down a ramp it can't be pulled back up to a goal up there.
+  const d = setup('downhill-only');
+  const blue = d.sim.marbles.findIndex((m) => m.color === 'blue');
+  d.sim.marbles[blue].delivered = true;
+  assert.equal(d.powerups.activate('magnet', d.ctx, { marble: blue }).reason, 'home');
+  assert.equal(player.coins(), 200);
+  assert.equal(d.player.coins(), 200);
+});
+
+test('Magnetic Pull never climbs a ramp', () => {
+  // Downhill Only: orange sits up on the raised row; its goal is down a ramp. From the goal
+  // end the route back up is closed.
+  const l = level('downhill-only');
+  const sim = createSim(buildTrack(l));
+  const track = sim.track;
+  const ramps = track.edges.filter((e) => Math.abs(e.pts[0][1] - e.pts[e.pts.length - 1][1]) > 0.3);
+  assert.ok(ramps.length, 'level has ramps');
+  for (const m of sim.marbles) {
+    const r = routeFor(sim, m);
+    if (!r) continue;
+    // Follow the route's first step: it must not be uphill.
+    const e = track.edges[m.edge];
+    const ahead = r.sign > 0 ? e.L : 0;
+    const y = (s) => { const k = Math.min(e.pts.length - 1, Math.round((s / e.L) * (e.pts.length - 1))); return e.pts[k][1]; };
+    assert.ok(y(ahead) <= y(m.s) + 0.06);
+  }
+});
+
+test('tilting hard against Magnetic Pull wins: the player stays in control', () => {
+  const { powerups, sim, ctx } = setup('first-tilt');
+  powerups.activate('magnet', ctx, { marble: 0 });
+  const startS = sim.marbles[0].s;
+  run(sim, powerups, 2, gravityInMachine(directionVector('W')));
+  assert.ok(sim.marbles[0].s <= startS + 1e-6, 'the marble went the way of the tilt');
+  assert.equal(sim.marbles[0].delivered, false);
+});
+
+test('Magnetic Pull expires after 5 s', () => {
+  const { powerups, sim, ctx } = setup('first-tilt');
+  powerups.activate('magnet', ctx, { marble: 0 });
+  powerups.tick(4.9, sim);
+  assert.ok(sim.marbles[0].pull);
+  powerups.tick(0.2, sim);
+  assert.equal(sim.marbles[0].pull, null);
+  assert.equal(sim.marbles[0].magnet, false);
+});
+
+test('Magnetic Pull with too few coins is refused before anything happens', () => {
+  const { powerups, sim, ctx } = setup('first-tilt', 100);
+  assert.equal(powerups.activate('magnet', ctx, { marble: 0 }).reason, 'coins');
+  assert.equal(sim.marbles[0].pull, null);
+});
+
+// ---------- Checkpoint ----------
+
+function playState(sim) {
+  return JSON.stringify({ m: sim.marbles.map((m) => [m.edge, m.s, m.v, m.delivered]), g: sim.gates.map((g) => g.open), p: sim.plates.map((p) => p.pressed), f: sim.goals.map((g) => g.filled) });
+}
+
+test('Checkpoint brings back the exact moment, and play continues identically from it', () => {
+  const l = level('one-key-two-locks');
+  const a = createSim(buildTrack(l));
+  const tilt = gravityInMachine(directionVector('NE'));
+  for (let t = 0; t < 0.8; t += SIM_DT) stepSim(a, SIM_DT, tilt); // marbles moving, plate pressed
+  const snap = snapshotOf(a, { tilt: [0.5, -0.5], timeLeft: 12.5, elapsed: 18.5, timerRunning: true });
+  const atSave = playState(a);
+  for (let t = 0; t < 1.5; t += SIM_DT) stepSim(a, SIM_DT, gravityInMachine(directionVector('SW')));
+  assert.notEqual(playState(a), atSave);
+  restoreInto(a, snap);
+  assert.equal(playState(a), atSave);
+  // A fresh copy restored from the same snapshot evolves exactly like the original.
+  const b = createSim(buildTrack(l));
+  restoreInto(b, snap);
+  for (let t = 0; t < 1; t += SIM_DT) {
+    stepSim(a, SIM_DT, tilt);
+    stepSim(b, SIM_DT, tilt);
+  }
+  assert.equal(playState(a), playState(b));
+  assert.deepEqual([snap.timeLeft, snap.elapsed], [12.5, 18.5]);
+});
+
+test('Checkpoint: 220 coins, one held at a time, restorable once, dropped by a restart', () => {
+  const { player, powerups, sim, ctx } = setup();
+  const withSnap = { ...ctx, snapshot: () => snapshotOf(sim, { tilt: [0, 0], timeLeft: 20, elapsed: 5, timerRunning: true }) };
+  assert.equal(powerups.activate('checkpoint', withSnap).reason, 'coins'); // 200 < 220
+  player.addCoins(300);
+  assert.deepEqual(powerups.activate('checkpoint', withSnap), { ok: true });
+  assert.equal(player.coins(), 280);
+  assert.equal(powerups.activate('checkpoint', withSnap).reason, 'saved');
+  assert.equal(player.coins(), 280);
+  assert.ok(powerups.takeCheckpoint());
+  assert.equal(powerups.takeCheckpoint(), null, 'only once');
+  powerups.activate('checkpoint', withSnap);
+  powerups.reset(sim);
+  assert.equal(powerups.checkpoint(), null, 'a restart drops it');
+});
+
+test('restoring ends every running effect', () => {
+  const { player, powerups, sim, ctx } = setup();
+  player.addCoins(1000);
+  powerups.activate('speed', ctx);
+  powerups.activate('gates', ctx);
+  const snap = snapshotOf(sim, { tilt: [0, 0], timeLeft: 20, elapsed: 5, timerRunning: true });
+  restoreInto(sim, snap);
+  powerups.resetForRestore(sim);
+  assert.equal(sim.speedScale, 1);
+  assert.ok(sim.gates.every((g) => !g.forced));
+});

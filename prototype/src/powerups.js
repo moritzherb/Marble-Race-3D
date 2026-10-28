@@ -6,10 +6,41 @@
 // and they all end when the level is won or lost.
 
 import { ECONOMY, powerUp } from './economy.js';
+import { PHYSICS } from './config.js';
+import { routeFor, pullFor } from './route.js';
+
+// Everything that describes a moment of play, so a checkpoint can bring it back exactly. The
+// rail physics is fully described by these numbers: there are no physics bodies to re-sync.
+export function snapshotOf(sim, play) {
+  return {
+    marbles: sim.marbles.map((m) => ({ edge: m.edge, s: m.s, v: m.v, delivered: m.delivered, pos: [...m.pos], tangent: [...m.tangent], distance: m.distance })),
+    goals: sim.goals.map((g) => g.filled),
+    plates: sim.plates.map((p) => p.pressed),
+    gates: sim.gates.map((g) => ({ open: g.open, powered: g.powered })),
+    time: sim.time,
+    tilt: [...play.tilt],
+    timeLeft: play.timeLeft,
+    elapsed: play.elapsed,
+    timerRunning: play.timerRunning,
+  };
+}
+
+// Put a snapshot back into `sim` (same level). Power-up effects are not part of it.
+export function restoreInto(sim, snap) {
+  sim.marbles.forEach((m, i) => {
+    Object.assign(m, snap.marbles[i], { pos: [...snap.marbles[i].pos], tangent: [...snap.marbles[i].tangent], pull: null, magnet: false });
+  });
+  sim.goals.forEach((g, i) => (g.filled = snap.goals[i]));
+  sim.plates.forEach((p, i) => (p.pressed = snap.plates[i]));
+  sim.gates.forEach((g, i) => Object.assign(g, snap.gates[i], { forced: false }));
+  sim.time = snap.time;
+  sim.speedScale = 1;
+}
 
 export function createPowerUps({ player, config = ECONOMY }) {
   let uses = {}; // uses in the current attempt, by power-up id
   const effects = {}; // running timed effects, by id: { left, total, ... }
+  let checkpoint = null; // a saved moment of this level, until restored once or the level is left
   const def = (id) => {
     const d = powerUp(id, config);
     if (!d) throw new Error(`Unknown power-up "${id}"`);
@@ -22,6 +53,7 @@ export function createPowerUps({ player, config = ECONOMY }) {
     if (ctx.levelIndex + 1 < config.powerUps.unlockLevel) return 'locked';
     if (!ctx.playing) return 'not now';
     if (effects[id]) return 'active';
+    if (id === 'checkpoint' && checkpoint) return 'saved';
     if ((uses[id] || 0) >= d.perAttempt) return 'used';
     if (player.coins() < d.cost) return 'coins';
     return null;
@@ -39,6 +71,24 @@ export function createPowerUps({ player, config = ECONOMY }) {
     },
     gates: (d) => {
       effects.gates = { left: d.duration, total: d.duration };
+      return true;
+    },
+    // extra.marble: index of the chosen marble. Refused (and not charged) without a route.
+    magnet: (d, ctx, extra) => {
+      const m = ctx.sim.marbles[extra?.marble];
+      if (!m) return { ok: false, reason: 'no marble' };
+      if (m.delivered) return { ok: false, reason: 'home' };
+      const route = routeFor(ctx.sim, m);
+      if (!route) return { ok: false, reason: 'no route' };
+      if (route.length > d.maxRoute) return { ok: false, reason: 'far' };
+      effects.magnet = { left: d.duration, total: d.duration, marble: extra.marble };
+      return true;
+    },
+    // ctx.snapshot(): the moment to keep (see snapshotOf).
+    checkpoint: (d, ctx) => {
+      const snap = ctx.snapshot?.();
+      if (!snap) return false;
+      checkpoint = snap;
       return true;
     },
     // extra.hint: a direction already found by hints.js (finding none is never charged).
@@ -65,7 +115,8 @@ export function createPowerUps({ player, config = ECONOMY }) {
       if (!start) return { ok: false, reason: 'unknown' };
       const paid = player.pay(d.cost, d.name, () => {
         if ((uses[id] || 0) >= d.perAttempt || effects[id]) return false;
-        if (start(d, ctx, extra) === false) return false;
+        const started = start(d, ctx, extra);
+        if (started === false || started?.ok === false) return started;
         uses[id] = (uses[id] || 0) + 1;
         return true;
       });
@@ -78,6 +129,8 @@ export function createPowerUps({ player, config = ECONOMY }) {
       const ended = [];
       for (const [id, e] of Object.entries(effects)) {
         e.left -= dt;
+        // Magnetic Pull also ends the moment its marble is home.
+        if (id === 'magnet' && sim.marbles[e.marble]?.delivered) e.left = 0;
         if (e.left <= 0) {
           delete effects[id];
           ended.push(id);
@@ -92,6 +145,23 @@ export function createPowerUps({ player, config = ECONOMY }) {
       if (!sim) return;
       sim.speedScale = effects.speed ? def('speed').factor : 1;
       for (const g of sim.gates) g.forced = Boolean(effects.gates);
+      // Magnetic Pull: a push along the route for one marble, as strong as `strength` of a
+      // full tilt. Recomputed every step, so it follows gates opening and closing.
+      const mag = effects.magnet;
+      const full = PHYSICS.gravity * Math.sin((PHYSICS.maxTiltDeg * Math.PI) / 180);
+      sim.marbles.forEach((m, i) => {
+        const on = Boolean(mag && mag.marble === i && !m.delivered);
+        m.magnet = on;
+        m.pull = on ? pullFor(sim, m, def('magnet').strength * full) : null;
+      });
+    },
+
+    // Checkpoint: whether one is saved, and taking it (once) to restore.
+    checkpoint: () => checkpoint,
+    takeCheckpoint() {
+      const snap = checkpoint;
+      checkpoint = null;
+      return snap;
     },
 
     // The level ended (won or lost): every effect stops.
@@ -100,8 +170,14 @@ export function createPowerUps({ player, config = ECONOMY }) {
       api.apply(sim);
     },
 
-    // A new attempt: uses start again and nothing is running.
+    // A new attempt: uses start again, nothing is running, and any checkpoint is dropped.
     reset(sim) {
+      uses = {};
+      checkpoint = null;
+      api.endAll(sim);
+    },
+    // Carrying on from a restored checkpoint: limits start again, the checkpoint is used up.
+    resetForRestore(sim) {
       uses = {};
       api.endAll(sim);
     },

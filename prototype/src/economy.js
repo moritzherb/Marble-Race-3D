@@ -32,7 +32,8 @@ export const ECONOMY = {
       { id: 'speed', name: 'Speed Boost', cost: 50, perAttempt: 1, duration: 6, factor: 1.4, about: 'All marbles roll 40% faster for 6 seconds.' },
       { id: 'hint', name: 'Hint', cost: 80, perAttempt: 3, duration: 4, about: 'Shows the best next tilt from where the marbles are.' },
       { id: 'gates', name: 'Open All Gates', cost: 140, perAttempt: 1, duration: 5, about: 'Every gate and shutter stands open for 5 seconds.' },
-      { id: 'magnet', name: 'Magnetic Pull', cost: 160, perAttempt: 1, duration: 5, strength: 0.45, maxRoute: 12, about: 'Pick a marble: for 5 seconds it is pulled along the grooves towards its own goal.' },
+      // strength: the pull as a fraction of a full tilt (a full tilt the other way still wins); maxRoute: blocks along the grooves.
+      { id: 'magnet', name: 'Magnetic Pull', cost: 160, perAttempt: 1, duration: 5, strength: 0.6, maxRoute: 12, about: 'Pick a marble: for 5 seconds it is pulled along the grooves towards its own goal.' },
       { id: 'checkpoint', name: 'Checkpoint', cost: 220, perAttempt: Infinity, about: 'Saves this moment. If you then lose, you can carry on from here once.' },
     ],
   },

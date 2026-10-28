@@ -14,9 +14,10 @@ import { createAds, loadAdConfig } from './ads.js';
 import { admobProvider, nativePlatform } from './ads-admob.js';
 import { createPlayer, clockText } from './player.js';
 import { ECONOMY, powerUp } from './economy.js';
-import { createPowerUps } from './powerups.js';
+import { createPowerUps, snapshotOf, restoreInto } from './powerups.js';
 import { createPowerBar, POWER_ICONS } from './powerbar.js';
 import { decodeTable, findHint } from './hints.js';
+import { routeFor } from './route.js';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_PHYSICS = { ...PHYSICS };
@@ -67,7 +68,13 @@ const HEART = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path f
 const COIN = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#e8b23a"/><circle cx="12" cy="12" r="9" fill="none" stroke="#a8730f" stroke-width="2"/><circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff1c2" stroke-width="1.6" opacity=".85"/></svg>';
 // Power-ups (from level 11): rules in powerups.js, the row of tokens in powerbar.js.
 const powerups = createPowerUps({ player });
-const puContext = () => ({ sim: game.sim, playing: game.screen === 'game' && game.phase === 'playing' && !game.autoplay, levelIndex: game.index, addTime });
+const puContext = () => ({
+  sim: game.sim,
+  playing: game.screen === 'game' && game.phase === 'playing' && !game.autoplay,
+  levelIndex: game.index,
+  addTime,
+  snapshot: () => snapshotOf(game.sim, { tilt: game.tilt.current, timeLeft: game.timeLeft, elapsed: game.elapsed, timerRunning: game.timerRunning }),
+});
 const powerBar = createPowerBar({ bar: $('powerbar'), tag: $('ptag'), powerups, player, context: puContext, use: usePowerUp, coinIcon: COIN });
 setInterval(() => powerBar.update(), 120);
 
@@ -310,12 +317,91 @@ const FEEDBACK = {
 
 function usePowerUp(id) {
   if (id === 'hint') return useHint();
+  if (id === 'magnet') return pickMagnetMarble();
   const r = powerups.activate(id, puContext());
   if (!r.ok) return powerBar.message(id, powerBar.reasonText(id, r.reason));
   audio.playEvent({ type: 'platePress' });
   if (FEEDBACK[id]) flash(FEEDBACK[id](powerUp(id)));
+  if (id === 'checkpoint') flash(`Checkpoint saved with ${clockLabel(game.timeLeft)} on the clock`, 2200);
   updateLives();
   powerBar.update();
+}
+
+const clockLabel = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const colorName = (c) => c.charAt(0).toUpperCase() + c.slice(1);
+
+// Magnetic Pull: pick a marble first. Cancelling, or a marble with no open route, costs nothing.
+function pickMagnetMarble() {
+  const reason = powerups.blocker('magnet', puContext());
+  if (reason) return powerBar.message('magnet', powerBar.reasonText('magnet', reason));
+  const marbles = game.sim.marbles.map((m, i) => ({ m, i })).filter(({ m }) => !m.delivered);
+  powerBar.custom(
+    `<h3>${POWER_ICONS.magnet}Magnetic Pull</h3>
+    <p>Which marble? It is pulled towards its own goal for ${powerUp('magnet').duration} seconds.</p>
+    <div class="picker">${marbles.map(({ m, i }) => `<button type="button" data-pick="${i}" style="--c:${colorCss(m.color)}" aria-label="${colorName(m.color)}"></button>`).join('')}</div>
+    <button class="btn" type="button" data-cancel>Cancel</button>`,
+    10000,
+    (e) => {
+      if (e.target.closest('[data-cancel]')) return powerBar.disarm();
+      const pick = e.target.closest('[data-pick]');
+      if (!pick) return;
+      const i = Number(pick.dataset.pick);
+      const color = colorName(game.sim.marbles[i].color);
+      const r = powerups.activate('magnet', puContext(), { marble: i });
+      if (!r.ok) {
+        const why = {
+          'no route': `${color} can't reach its goal from here right now: a gate is shut on the way, or the way is uphill.`,
+          far: `${color}'s goal is too far away (more than ${powerUp('magnet').maxRoute} blocks along the grooves).`,
+          home: `${color} is already home.`,
+        }[r.reason];
+        return powerBar.message('magnet', why || powerBar.reasonText('magnet', r.reason));
+      }
+      powerBar.disarm();
+      audio.playEvent({ type: 'platePress' });
+      flash(`Magnetic Pull on ${color.toLowerCase()} · ${powerUp('magnet').duration} s`);
+      updateLives();
+      powerBar.update();
+    },
+  );
+}
+
+// Checkpoint: after a loss, carry on from the saved moment. The loss costs its life as usual;
+// carrying on needs a life left after that (levels 1-10 never cost one).
+function checkpointButton() {
+  const snap = powerups.checkpoint();
+  if (!snap || game.autoplay) return '';
+  const free = player.isFreeLevel(game.index) || !player.attemptAtRisk();
+  const enough = free || player.lives().lives >= 2;
+  return `<button class="btn wide" data-act="restoreCheckpoint" type="button"${enough ? '' : ' disabled'}>Back to checkpoint · ${clockLabel(snap.timeLeft)}${free ? '' : ` <span class="cost">· −1 ${HEART}</span>`}</button>
+    ${enough ? '' : '<p class="fine">This loss uses your last life, so there is none left to carry on with.</p>'}`;
+}
+
+function restoreCheckpoint() {
+  const snap = powerups.checkpoint();
+  if (!snap) return;
+  if (!player.isFreeLevel(game.index) && player.attemptAtRisk() && player.lives().lives < 2) return;
+  powerups.takeCheckpoint();
+  pendingGiveUp = null;
+  closeCard();
+  if (player.attemptAtRisk()) player.chargeAttempt();
+  player.startAttempt(game.level.id, game.index);
+  restoreInto(game.sim, snap);
+  game.tilt = createTilt();
+  game.tilt.current = [...snap.tilt];
+  game.phase = 'playing';
+  game.timeLeft = snap.timeLeft;
+  game.elapsed = snap.elapsed;
+  game.timerRunning = snap.timerRunning;
+  game.staked = false;
+  game.attempt = { extraTimeUsed: 0, secondChance: 0 };
+  powerups.resetForRestore(game.sim);
+  view.clearHint();
+  powerBar.render(game.index);
+  logAttempt('restored');
+  renderChips();
+  updateClock();
+  updateLives();
+  flash('Back to your checkpoint', 2000);
 }
 
 // Hint: look the position up in the level's table (see hints.js). Finding no hint is free.
@@ -684,6 +770,7 @@ const ACTIONS = {
   pick: (el) => requestGiveUp('leave', () => play(Number(el.dataset.i))),
   solution: () => requestGiveUp('leave', watchSolution),
   pauseHome: () => requestGiveUp('leave', showHome),
+  restoreCheckpoint: (el) => !el.disabled && restoreCheckpoint(),
   buyLife: (el) => {
     if (el.disabled) return;
     el.disabled = true;
@@ -772,6 +859,7 @@ const CARDS = {
     <h2>Time's up</h2>
     <p>${home} of ${game.sim.marbles.length} marbles made it home.</p>
     ${secondChanceButton()}
+    ${checkpointButton()}
     ${offer ? `<button class="btn wide" data-act="watchAd" type="button">Watch an ad for +${ads.config.rewardedExtraTime.seconds} s</button>` : ''}
     <p class="note" role="status">${adMessage || game.level.learn}</p>
     ${lossNote()}
@@ -786,6 +874,7 @@ const CARDS = {
     return `
     <h2>${kind === 'restart' ? 'Restart this level?' : 'Leave this level?'}</h2>
     <p>You've been playing for more than ${ECONOMY.lives.freeRestartSeconds} seconds, so giving up this attempt costs 1 life. You have ${lives}.</p>
+    ${checkpointButton()}
     <div class="row">
       <button class="btn" data-act="close" type="button">Keep playing</button>
       <button class="btn primary" data-act="giveUp" type="button">${kind === 'restart' ? 'Restart' : 'Leave'} <span class="cost">· −1 ${HEART}</span></button>
@@ -1026,7 +1115,7 @@ function summariseLog() {
   for (const e of loadLog()) {
     if (!byLevel.has(e.level)) byLevel.set(e.level, { tries: 0, won: 0, timeUp: 0, restarts: 0, best: null });
     const r = byLevel.get(e.level);
-    if (e.result === 'extra-time') continue;
+    if (e.result === 'extra-time' || e.result === 'restored') continue;
     r.tries++;
     if (e.result === 'won') {
       r.won++;
@@ -1064,4 +1153,4 @@ if (hot?.ready) hot.ready(start);
 else start(hot?.data ?? {});
 
 // For automated checks and debugging in the browser console.
-window.__mmr = { game, play, showHome, restart, LEVELS, view, ads, player, powerups, usePowerUp };
+window.__mmr = { game, play, showHome, restart, LEVELS, view, ads, player, powerups, usePowerUp, routeFor };
