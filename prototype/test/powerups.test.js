@@ -12,7 +12,7 @@ import { createPowerUps } from '../src/powerups.js';
 import { ECONOMY, powerUp } from '../src/economy.js';
 
 const level = (id) => LEVELS.find((l) => l.id === id);
-function setup(levelId = 'one-key-two-locks', coins) {
+function setup(levelId = 'two-doors-one-key', coins) {
   const player = createPlayer({ storage: memoryStorage(), now: () => 0 });
   if (coins !== undefined) player.addCoins(coins - player.coins());
   const powerups = createPowerUps({ player });
@@ -95,7 +95,7 @@ test('Speed Boost keeps every rule: each level\'s reference run still wins at bo
 });
 
 test('Open All Gates: every gate and shutter opens for 5 s, plates keep working, then they close again', () => {
-  const { powerups, sim, ctx } = setup('one-key-two-locks');
+  const { powerups, sim, ctx } = setup('two-doors-one-key');
   stepSim(sim, SIM_DT, [0, -30, 0]);
   const real = sim.gates.map((g) => g.open);
   assert.ok(real.includes(false), 'something starts closed');
@@ -109,7 +109,7 @@ test('Open All Gates: every gate and shutter opens for 5 s, plates keep working,
 });
 
 test('a gate closing at the end of Open All Gates pushes a marble in it to one side', () => {
-  const { powerups, sim, ctx } = setup('one-key-two-locks');
+  const { powerups, sim, ctx } = setup('two-doors-one-key');
   powerups.activate('gates', ctx);
   stepSim(sim, SIM_DT, [0, -30, 0]);
   const gate = sim.gates.find((g) => !g.inverse);
@@ -253,7 +253,7 @@ function playState(sim) {
 }
 
 test('Checkpoint brings back the exact moment, and play continues identically from it', () => {
-  const l = level('one-key-two-locks');
+  const l = level('two-doors-one-key');
   const a = createSim(buildTrack(l));
   const tilt = gravityInMachine(directionVector('NE'));
   for (let t = 0; t < 0.8; t += SIM_DT) stepSim(a, SIM_DT, tilt); // marbles moving, plate pressed

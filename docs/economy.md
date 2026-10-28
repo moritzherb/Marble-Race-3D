@@ -102,18 +102,18 @@ Difficulty is the fewest whole moves the solver needs.
 | 8 | Underpass | 2 moves, teaching | 20 | 10 | 10 | 40 |
 | 9 | Chain Reaction | 3 moves, teaching | 20 | 10 | 10 | 40 |
 | 10 | The Machine | 3 moves, teaching | 20 | 10 | 10 | 40 |
-| 11 | Over and Under | 2 moves | 30 | 15 | 15 | 60 |
-| 12 | Passing Place | 3 moves | 30 | 15 | 15 | 60 |
-| 13 | Shift Change | 3 moves | 30 | 15 | 15 | 60 |
-| 14 | Level Crossing | 2 moves, new mechanic | 30 | 15 | 15 | 60 |
-| 15 | Step Aside | 4 moves | 30 | 15 | 15 | 60 |
-| 16 | Sidings | 3 moves | 30 | 15 | 15 | 60 |
-| 17 | Handover | 3 moves | 30 | 15 | 15 | 60 |
-| 18 | Pendulum | 3 moves | 30 | 15 | 15 | 60 |
-| 19 | One Key, Two Locks | 4 moves | 30 | 15 | 15 | 60 |
-| 20 | Backbone | 4 moves | 30 | 15 | 15 | 60 |
+| 11 | Crossroads | 4 moves | 30 | 15 | 15 | 60 |
+| 12 | Off the Plate | 4 moves, new piece | 30 | 15 | 15 | 60 |
+| 13 | Bridge and Siding | 4 moves | 30 | 15 | 15 | 60 |
+| 14 | Two Doors, One Key | 4 moves | 30 | 15 | 15 | 60 |
+| 15 | Summit | 6 moves, hard | 45 | 25 | 25 | 95 |
+| 16 | Ring Pair | 4 moves | 30 | 15 | 15 | 60 |
+| 17 | Colour Check | 4 moves, new piece | 30 | 15 | 15 | 60 |
+| 18 | Backbone | 4 moves | 30 | 15 | 15 | 60 |
+| 19 | Gatekeeper | 4 moves | 30 | 15 | 15 | 60 |
+| 20 | H-Frame | 6 moves | 30 | 15 | 15 | 60 |
 
-A player with mostly two-star finishes has about 950 coins at level 20, enough to try every power-up a few times.
+A player with mostly two-star finishes has about 975 coins at level 20, enough to try every power-up a few times.
 
 ### Spending and prices
 

@@ -38,8 +38,7 @@ test('following the hints from the start wins every level in its fewest moves', 
 });
 
 test('a lost position is recognised as one', () => {
-  // Level 12, Passing Place: tilting E first sends blue home, but then orange... find any
-  // dead position by trying first moves until the table says so.
+  // Find dead positions by trying every first move in levels 11-40 until the table says so.
   let found = 0;
   for (const l of LEVELS.slice(10, 40)) {
     const table = tableFor(l);
