@@ -533,9 +533,15 @@ export function createView(canvas) {
   postGeo.translate(0, POST_HEIGHT / 2, 0);
   const knobGeo = new THREE.SphereGeometry(0.05, 14, 10);
   const beadGeo = new THREE.SphereGeometry(0.03, 10, 8);
+  // A flat lightning bolt, lying on the groove floor, pointing along +x.
+  const boltShape = new THREE.Shape();
+  [[0.36, 0], [-0.03, 0.12], [0.04, 0.03], [-0.36, 0.04], [0.03, -0.12], [-0.04, -0.03]].forEach(([x, z], i) => (i ? boltShape.lineTo(x, z) : boltShape.moveTo(x, z)));
+  boltShape.closePath();
+  const boltGeo = new THREE.ShapeGeometry(boltShape);
+  boltGeo.rotateX(-Math.PI / 2);
   const shutterTex = shutterTexture();
   const shutterRed = new THREE.MeshStandardMaterial({ color: 0xd8352a, roughness: 0.5 });
-  const shared = new Set([cubeGeo, archGeo, archUnderCarvedGeo, liningGeo, shadeGeo, marbleGeo, postGeo, knobGeo, beadGeo]);
+  const shared = new Set([cubeGeo, archGeo, archUnderCarvedGeo, liningGeo, shadeGeo, marbleGeo, postGeo, knobGeo, beadGeo, boltGeo]);
 
   let pivot = null; // tilts around the machine's centre
   let content = null; // machine coordinates live here
@@ -1040,9 +1046,9 @@ export function createView(canvas) {
     if (!current) return;
     clearHint();
     const { min, max } = current.track.bounds;
-    const length = Math.min(3.2, Math.max(1.6, Math.min(max[0] - min[0], max[2] - min[2]) * 0.65));
-    const w = 0.2;
-    const head = 0.62;
+    const length = Math.min(2.2, Math.max(1.3, Math.min(max[0] - min[0], max[2] - min[2]) * 0.45));
+    const w = 0.15;
+    const head = 0.48;
     const shape = new THREE.Shape();
     shape.moveTo(-length / 2, -w);
     shape.lineTo(length / 2 - head, -w);
@@ -1069,7 +1075,67 @@ export function createView(canvas) {
     current.hint = { group, mats: [back.material, front.material], geo, left: seconds, total: seconds };
   }
 
+  // The Hint's marble: a ring around the marble to move, a trail of dots along the way this
+  // move rolls it, and a faint copy of it where it stops.
+  function showMarbleHint(index, path, seconds) {
+    if (!current || path.length < 2) return;
+    clearTrail();
+    const group = new THREE.Group();
+    const mats = [];
+    const geos = [];
+    const mat = (m) => (mats.push(m), m);
+    const geo = (g) => (geos.push(g), g);
+    const lift = (p) => new THREE.Vector3(p[0], p[1] + MARBLE_LIFT, p[2]);
+    const ringGeo = geo(new THREE.TorusGeometry(MARBLE_VIEW_R + 0.11, 0.032, 8, 40));
+    const ring = new THREE.Mesh(ringGeo, mat(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthTest: false })));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.copy(lift(path[0]));
+    ring.renderOrder = 23;
+    group.add(ring);
+    // Dots every 0.2 blocks along the way (none across a jump through a portal).
+    const dotGeo = geo(new THREE.SphereGeometry(0.05, 10, 8));
+    const dotMat = mat(new THREE.MeshBasicMaterial({ color: 0x22c3b8, transparent: true, depthTest: false }));
+    const dots = [];
+    let carry = 0.2;
+    for (let i = 1; i < path.length; i++) {
+      const a = lift(path[i - 1]);
+      const b = lift(path[i]);
+      const d = a.distanceTo(b);
+      if (d > 0.6) continue;
+      for (; carry <= d; carry += 0.2) {
+        const dot = new THREE.Mesh(dotGeo, dotMat.clone());
+        mats.push(dot.material);
+        dot.position.lerpVectors(a, b, carry / d);
+        dot.renderOrder = 22;
+        group.add(dot);
+        dots.push(dot);
+      }
+      carry -= d;
+    }
+    const color = MARBLE_COLORS[current.track.starts[index]?.color] ?? 0xffffff;
+    const ghost = new THREE.Mesh(marbleGeo, mat(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthTest: false })));
+    ghost.position.copy(lift(path.at(-1)));
+    ghost.renderOrder = 22;
+    const endRing = new THREE.Mesh(ringGeo, mat(new THREE.MeshBasicMaterial({ color: 0x22c3b8, transparent: true, depthTest: false })));
+    endRing.rotation.x = Math.PI / 2;
+    endRing.position.copy(ghost.position);
+    endRing.renderOrder = 23;
+    group.add(ghost, endRing);
+    content.add(group);
+    current.trail = { group, ring, endRing, ghost, dots, mats, geos, left: seconds, total: seconds };
+  }
+
+  function clearTrail() {
+    const t = current?.trail;
+    if (!t) return;
+    content.remove(t.group);
+    t.geos.forEach((g) => g.dispose());
+    t.mats.forEach((m) => m.dispose());
+    current.trail = null;
+  }
+
   function clearHint() {
+    clearTrail();
     const h = current?.hint;
     if (!h) return;
     content.remove(h.group);
@@ -1079,6 +1145,26 @@ export function createView(canvas) {
   }
 
   function updateEffects(sim, dt) {
+    const t = current.trail;
+    if (t) {
+      t.left -= dt;
+      if (t.left <= 0) clearTrail();
+      else {
+        const fade = Math.min(1, t.left / 0.4, (t.total - t.left) / 0.2);
+        const beat = reducedMotion ? 1 : 1 + 0.12 * Math.sin(clock * 7);
+        t.ring.scale.setScalar(beat);
+        t.endRing.scale.setScalar(2 - beat);
+        t.ring.material.opacity = fade;
+        t.endRing.material.opacity = 0.9 * fade;
+        t.ghost.material.opacity = 0.5 * fade;
+        // A wave runs along the dots from the marble to where it stops.
+        const n = t.dots.length;
+        t.dots.forEach((d, i) => {
+          const wave = reducedMotion ? 0.8 : 0.45 + 0.55 * Math.max(0, Math.sin(clock * 6 - (i / Math.max(1, n)) * 6));
+          d.material.opacity = fade * wave;
+        });
+      }
+    }
     const h = current.hint;
     if (h) {
       h.left -= dt;
@@ -1086,8 +1172,8 @@ export function createView(canvas) {
       else {
         const fade = Math.min(1, h.left / 0.4, (h.total - h.left) / 0.2);
         const beat = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(clock * 7);
-        h.mats[1].opacity = 0.95 * fade * beat;
-        h.mats[0].opacity = 0.9 * fade;
+        h.mats[1].opacity = 0.75 * fade * beat;
+        h.mats[0].opacity = 0.7 * fade;
         h.group.position.y = current.track.bounds.max[1] + 0.5 + (reducedMotion ? 0 : 0.06 * Math.sin(clock * 4));
       }
     }
@@ -1113,13 +1199,41 @@ export function createView(canvas) {
       vis.halo.ripple.material.opacity = 0.65 * (1 - phase);
     });
 
-    // Speed Boost: a warm glow on every marble while it runs.
+    // Speed Boost: a warm glow on every marble, and a flickering lightning bolt under it,
+    // pointing the way it rolls.
     const boosted = (sim.speedScale || 1) > 1;
     sim.marbles.forEach((m, i) => {
-      const mat = current.marbles[i].mesh.material;
-      const target = boosted && !m.delivered ? 0.35 + (reducedMotion ? 0 : 0.15 * Math.sin(clock * 9 + i)) : 0;
+      const vis = current.marbles[i];
+      const mat = vis.mesh.material;
+      const on = boosted && !m.delivered && !m.lost;
+      const target = on ? 0.25 + (reducedMotion ? 0 : 0.1 * Math.sin(clock * 9 + i)) : 0;
       mat.emissive.setHex(0xff7a2e);
       mat.emissiveIntensity += (target - mat.emissiveIntensity) * Math.min(1, dt * 10);
+      if (on && !vis.bolt) {
+        // A bright yellow bolt with an orange rim, so it reads on pale wood too.
+        const flat = (color, order) => {
+          const mesh = new THREE.Mesh(boltGeo, new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+          mesh.renderOrder = order;
+          return mesh;
+        };
+        const rim = flat(0xff5a00, 5);
+        rim.scale.setScalar(1.28);
+        const fill = flat(0xffe600, 6);
+        fill.position.y = 0.002;
+        vis.bolt = new THREE.Group();
+        vis.bolt.add(rim, fill);
+        content.add(vis.bolt);
+      }
+      if (!vis.bolt) return;
+      vis.bolt.visible = on;
+      if (!on) return;
+      const p = vis.mesh.position;
+      vis.bolt.position.set(p.x, p.y - MARBLE_VIEW_R + 0.012, p.z);
+      const dir = m.v >= 0 ? m.tangent : m.tangent.map((v) => -v);
+      vis.bolt.rotation.set(0, Math.atan2(-dir[2], dir[0]), 0);
+      const flick = reducedMotion ? 1 : 0.75 + 0.25 * Math.abs(Math.sin(clock * 17 + i * 1.7));
+      vis.bolt.scale.setScalar(flick * (0.8 + Math.min(0.5, Math.abs(m.v) * 0.12)));
+      vis.bolt.children.forEach((c) => (c.material.opacity = 0.65 + 0.35 * flick));
     });
   }
 
@@ -1318,5 +1432,5 @@ export function createView(canvas) {
     outlines: current ? current.marbles.map((m) => m.ghost.visible) : [],
   });
 
-  return { build, sync, frame, resize, orbit, setSpin, popIn, screenToGround, showHintArrow, clearHint, renderer, debug };
+  return { build, sync, frame, resize, orbit, setSpin, popIn, screenToGround, showHintArrow, showMarbleHint, clearHint, renderer, debug };
 }

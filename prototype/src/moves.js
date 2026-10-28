@@ -37,8 +37,8 @@ function settleWatch(sim) {
 
 // Tilt `dir` until everything stops, then let go until everything stops again.
 // (When everything has already stopped under the tilt, letting go changes nothing, so
-// that part is skipped.)
-export function macro(sim, dir) {
+// that part is skipped.) `onStep(sim)` is called after every physics step, if given.
+export function macro(sim, dir, onStep = null) {
   const s = cloneSim(sim);
   const tilt = createTilt();
   tilt.target = directionVector(dir);
@@ -50,6 +50,7 @@ export function macro(sim, dir) {
   while (t < 4.5) {
     updateTilt(tilt, SIM_DT);
     stepSim(s, SIM_DT, gravityInMachine(tilt.current));
+    onStep?.(s);
     t += SIM_DT;
     if (isWon(s)) {
       won = true;
@@ -73,6 +74,7 @@ export function macro(sim, dir) {
     while (t - hold < 3) {
       updateTilt(tilt, SIM_DT);
       stepSim(s, SIM_DT, gravityInMachine(tilt.current));
+      onStep?.(s);
       t += SIM_DT;
       if (isWon(s)) {
         won = true;

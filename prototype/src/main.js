@@ -18,6 +18,7 @@ import { ECONOMY, powerUp } from './economy.js';
 import { createPowerUps, snapshotOf, restoreInto } from './powerups.js';
 import { createPowerBar } from './powerbar.js';
 import { decodeTable, findHint } from './hints.js';
+import { macro } from './moves.js';
 import { routeFor } from './route.js';
 import { ICONS, COIN_PILE, installIconDefs } from './icons.js';
 import { pop, heartBreak, flyCoins, countUp } from './fx.js';
@@ -166,8 +167,9 @@ function renderHomeLevel(from = null) {
   }, 500);
 }
 
-// The level start card (with power-ups to pick) comes once power-ups are unlocked.
-const hasStartCard = () => !game.autoplay && game.index + 1 >= ECONOMY.powerUps.unlockLevel;
+// From level 11, starting a level from the home screen first shows its start card (with
+// power-ups to pick) over the home screen; its Play button then opens the level.
+const hasStartCard = (index) => !game.autoplay && index + 1 >= ECONOMY.powerUps.unlockLevel;
 
 function play(index = game.index, { skipStart = false } = {}) {
   if (!isUnlocked(loadProgress(), index)) return;
@@ -176,6 +178,14 @@ function play(index = game.index, { skipStart = false } = {}) {
     return;
   }
   audio.unlock();
+  if (!skipStart && game.screen === 'home' && hasStartCard(index)) {
+    if (index !== game.index) {
+      prepareLevel(index); // the chosen level turns behind the card
+      renderHomeLevel();
+    }
+    openCard('start');
+    return;
+  }
   leaveAttempt();
   closeCard();
   if (index !== game.index || !game.level) prepareLevel(index);
@@ -185,7 +195,6 @@ function play(index = game.index, { skipStart = false } = {}) {
   view.setSpin(false);
   restart(false);
   showHint(game.level.tip);
-  if (!skipStart && hasStartCard()) openCard('start');
 }
 
 function restart(logIt = true) {
@@ -238,7 +247,7 @@ function win() {
   const attempt = game.sim;
   setTimeout(() => {
     if (game.phase === 'won' && game.sim === attempt) openCard('win', { stars, t, demo, reward, bonus: { coinsAdUsed: 0 } });
-  }, 650);
+  }, 220);
 }
 
 // The clock ran out, or (reason 'fell') a marble fell off a sky rail into nothing.
@@ -289,9 +298,9 @@ async function withLifeLoss(action) {
   action();
 }
 
-// Try the current level again: the old attempt is charged if it has to be, and with no
-// lives left the out-of-lives card shows instead. `start`: show the level start card.
-function retryLevel({ start = false } = {}) {
+// Try the current level again after a loss: the old attempt is charged if it has to be,
+// and with no lives left the out-of-lives card shows instead.
+function retryLevel() {
   closeCard();
   if (player.attemptAtRisk()) player.chargeAttempt();
   if (!player.canPlay(game.index)) {
@@ -300,7 +309,22 @@ function retryLevel({ start = false } = {}) {
     return;
   }
   restart(false);
-  if (start && hasStartCard()) openCard('start');
+}
+
+// The Restart button: every marble goes back to where it started. The clock keeps running
+// and it is the same attempt, so it never costs a life (and power-ups used stay used).
+function resetMarbles() {
+  if (game.screen !== 'game' || game.phase !== 'playing' || game.autoplay) return;
+  powerups.endAll(game.sim);
+  view.clearHint();
+  powerBar.disarm();
+  game.sim = createSim(game.track);
+  game.tilt = createTilt();
+  game.acc = 0;
+  logAttempt('reset');
+  renderChips();
+  powerBar.update();
+  pop('restart');
 }
 
 // ---------- Power-ups ----------
@@ -431,9 +455,35 @@ async function useHint() {
   const r = powerups.activate('hint', puContext(), { hint: h });
   if (!r.ok) return powerBar.message('hint', powerBar.reasonText('hint', r.reason));
   powerBar.disarm();
-  view.showHintArrow(h.dir, powerUp('hint').duration);
+  const seconds = powerUp('hint').duration;
+  view.showHintArrow(h.dir, seconds);
+  const path = hintPath(game.sim, h.dir);
+  if (path) view.showMarbleHint(path.index, path.points, seconds);
   updateLives();
   powerBar.update();
+}
+
+// The marble the hinted move is about, and the way it rolls: play the move out of sight
+// and follow every marble. The one that gets home wins; otherwise the one that moves furthest.
+function hintPath(sim, dir) {
+  const paths = sim.marbles.map((m) => [[...m.pos]]);
+  let n = 0;
+  const r = macro(sim, dir, (s) => {
+    if (n++ % 3) return;
+    s.marbles.forEach((m, i) => !m.lost && paths[i].push([...m.pos]));
+  });
+  const length = (p) => p.reduce((sum, q, k) => (k ? sum + Math.min(0.6, Math.hypot(q[0] - p[k - 1][0], q[1] - p[k - 1][1], q[2] - p[k - 1][2])) : 0), 0);
+  let best = -1;
+  let score = 0.3;
+  sim.marbles.forEach((m, i) => {
+    if (m.delivered) return;
+    const s = length(paths[i]) + (r.sim.marbles[i].delivered ? 100 : 0);
+    if (s > score) {
+      score = s;
+      best = i;
+    }
+  });
+  return best < 0 ? null : { index: best, points: paths[best] };
 }
 
 // "+1 heart · 150 coins" on the lives cards.
@@ -457,10 +507,6 @@ function updateLives() {
   $('homeLives').setAttribute('aria-label', `Lives: ${livesLine(info)}`);
   const card = document.getElementById('livesTimer');
   if (card) card.textContent = timer;
-  const atRisk = game.staked && game.phase === 'playing';
-  const tag = $('restartBtn').querySelector('.tag');
-  if (atRisk && !tag) $('restartBtn').insertAdjacentHTML('beforeend', lifeTag());
-  else if (!atRisk && tag) tag.remove();
 }
 setInterval(updateLives, 500);
 
@@ -514,7 +560,7 @@ $('pauseBtn').addEventListener('click', () => !game.adShowing && openCard('pause
 $('restartBtn').addEventListener('click', () => {
   if (game.adShowing) return;
   audio.unlock();
-  requestGiveUp('restart', () => retryLevel());
+  resetMarbles();
 });
 $('orbitLeft').addEventListener('click', () => view.orbit(-1));
 $('orbitRight').addEventListener('click', () => view.orbit(1));
@@ -525,7 +571,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     play();
   } else if (game.screen === 'game' && e.code === 'KeyR' && !e.repeat && !game.adShowing && !game.card) {
-    requestGiveUp('restart', () => retryLevel());
+    resetMarbles();
   } else if ((e.code === 'KeyN' || e.code === 'Enter') && game.card === 'win' && !game.adShowing) {
     ACTIONS.next();
   }
@@ -687,38 +733,41 @@ function closeCard() {
 }
 
 // A big title in white letters with a coloured outline.
-const TITLE_COLORS = { gold: ['#ffc93a', '#9a4300'], red: ['#ff6b4a', '#6e0b05'] };
+const TITLE_COLORS = { gold: ['url(#mm-gold)', '#6b4a12'], red: ['url(#mm-red)', '#5a140c'] };
 function titleSvg(text, color = 'gold') {
-  const [inner, outer] = TITLE_COLORS[color];
-  const size = text.length > 8 ? 58 : 78;
-  const t = (stroke, w, fill) => `<text x="165" y="80" text-anchor="middle" font-size="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${w}" stroke-linejoin="round" paint-order="stroke">${text}</text>`;
-  return `<svg class="title" viewBox="0 0 330 104" role="img" aria-label="${text}">${t(outer, 17, outer)}${t(inner, 7, '#fff')}</svg>`;
+  const [fill, edge] = TITLE_COLORS[color];
+  const size = text.length > 8 ? 54 : 70;
+  return `<svg class="title" viewBox="0 0 330 104" role="img" aria-label="${text}"><text x="165" y="78" text-anchor="middle" font-size="${size}" letter-spacing="2" fill="${fill}" stroke="${edge}" stroke-width="3" stroke-linejoin="round" paint-order="stroke" style="filter: drop-shadow(0 3px 6px rgba(0,0,0,.4))">${text}</text></svg>`;
 }
 
-const X = (act = 'close', label = 'Close') => `<button class="xbtn" data-act="${act}" type="button" aria-label="${label}">${ICONS.close}</button>`;
+const X = (act = 'close', label = 'Close') => `<button class="xbtn" data-act="${act}" type="button" aria-label="${label}"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>`;
 const walletHtml = (coins = player.coins(), lives = true) =>
   `<div class="wallet"><span class="pill" id="resWallet">${ICONS.coin}<b id="resCoins">${coins}</b></span>${lives ? `<span class="pill lives">${ICONS.heart}<span class="heart-n ol">${player.lives().lives}</span></span>` : ''}</div>`;
 
 const SCREENS = {
-  // Bravo: stars, the coins won, and an optional ad that multiplies them. Next goes home.
+  // Success: stars, then a panel with the time and the coins won (and an optional ad that
+  // multiplies them: its button shows what the pointer is on). Next goes home.
   win: ({ stars, t, demo, reward, bonus }) => {
     const paid = reward?.total || 0;
     const adOk = paid > 0 && ads.canOfferCoins(bonus);
     const segs = ECONOMY.winMultiplier.segments;
     return `
     ${walletHtml(player.coins() - paid, false)}
-    ${titleSvg(demo ? 'Solution' : 'Bravo!')}
+    ${titleSvg(demo ? 'Solution' : 'Success')}
     <div class="stars" aria-label="${stars} of 3 stars">${starsRow(stars)}</div>
-    <div class="time ol">${ICONS.clock}${t.toFixed(1)} s</div>
-    ${paid ? `<div class="loot" id="loot">${COIN_PILE}<b class="amount ol" id="lootAmount">+${paid}</b></div>` : ''}
-    ${adOk ? `<div class="mult idle" id="mult">${segs.map((m, i) => `<span class="ol" data-m="${m}" data-i="${i}">x${m}</span>`).join('')}<i class="pointer"></i></div>` : ''}
-    <div class="actions">
-      <button class="gbtn" data-act="next" type="button" data-focus>Next</button>
-      ${adOk ? `<button class="gbtn blue" data-act="adCoins" type="button" aria-label="Watch an ad to multiply the coins">${ICONS.coin}${paid * Math.min(...segs)}–${paid * Math.max(...segs)}<span class="badge-video">${ICONS.video}</span></button>` : ''}
+    <div class="panel">
+      <div class="summary">
+        <span class="time">${ICONS.clock}${t.toFixed(1)} s</span>
+        ${paid ? `<span class="loot" id="loot">${ICONS.coin}<b id="lootAmount">+${paid}</b></span>` : ''}
+      </div>
+      ${adOk ? `<div class="mult idle" id="mult">${segs.map((m, i) => `<span data-m="${m}" data-i="${i}">x${m}</span>`).join('')}<i class="pointer"></i></div>
+      <button class="gbtn blue wide" data-act="adCoins" type="button" aria-label="Watch an ad to multiply the coins">${ICONS.video}<span class="cost">${ICONS.coin}<b id="adValue">${paid * segs[0]}</b></span></button>` : ''}
     </div>
-    <div class="minor"><button class="gbtn cream round" data-act="retry" type="button" aria-label="Play again">${ICONS.restart}</button></div>`;
+    <div class="stack">
+      <button class="gbtn big wide" data-act="next" type="button" data-focus>Next</button>
+      <button class="linkish" data-act="retry" type="button">Play again</button>
+    </div>`;
   },
-  // Time's up: carry on (coins, an ad or a checkpoint), or accept the loss.
   // Time's up, or a marble fell (then more time wouldn't help: only a checkpoint or a retry).
   fail: ({ noAd = false } = {}) => {
     const fell = game.failReason === 'fell';
@@ -747,7 +796,21 @@ const SCREENS = {
 function wireWin(host, { reward }) {
   const paid = reward?.total || 0;
   const mult = host.querySelector('#mult');
-  if (mult) requestAnimationFrame(() => mult.style.setProperty('--w', `${mult.clientWidth}px`));
+  if (mult) {
+    requestAnimationFrame(() => mult.style.setProperty('--w', `${mult.clientWidth}px`));
+    // While the pointer sweeps, the ad button shows the coins under it.
+    const value = host.querySelector('#adValue');
+    const pointer = mult.querySelector('.pointer');
+    const segs = [...mult.querySelectorAll('span[data-m]')];
+    const follow = () => {
+      if (!host.contains(mult) || !mult.classList.contains('idle')) return;
+      const x = new DOMMatrixReadOnly(getComputedStyle(pointer).transform).m41;
+      const seg = segs.find((el) => x >= el.offsetLeft - 2 && x <= el.offsetLeft + el.offsetWidth + 2);
+      if (seg && value) value.textContent = paid * Number(seg.dataset.m);
+      requestAnimationFrame(follow);
+    };
+    requestAnimationFrame(follow);
+  }
   if (!paid) return;
   const coins = host.querySelector('#resCoins');
   setTimeout(() => {
@@ -947,21 +1010,22 @@ const ACTIONS = {
   close: () => closeCard(),
   retry: () => {
     if (game.adShowing) return;
-    withLifeLoss(() => retryLevel({ start: true }));
+    withLifeLoss(() => retryLevel());
   },
   giveUp: () => {
     const go = pendingGiveUp;
     pendingGiveUp = null;
     withLifeLoss(() => go?.());
   },
-  // Start the level with the power-ups picked on the start card.
+  // Open the level (the start card sits over the home screen) with the power-ups picked.
   go: () => {
     const picks = game.startPicks?.() || [];
     game.startPicks = null;
-    closeCard();
-    picks.forEach((id, k) => setTimeout(() => game.phase === 'playing' && usePowerUp(id), k * 650));
+    play(game.index, { skipStart: true });
+    if (game.screen !== 'game') return;
+    picks.forEach((id, k) => setTimeout(() => game.phase === 'playing' && usePowerUp(id), 400 + k * 650));
   },
-  startClose: () => showHome(),
+  startClose: () => closeCard(),
   // Next goes home, where the next level is waiting. This break is the only place an
   // interstitial may show.
   next: async () => {
@@ -992,7 +1056,7 @@ const ACTIONS = {
       pop('video', r.reason === 'closed-early' ? 'No reward' : 'No ad');
       return;
     }
-    el.remove();
+    el.hidden = true;
     const paid = data.reward.total;
     const m = pickMultiplier();
     player.grantBonus(paid * (m - 1), `ad x${m}`);
@@ -1200,6 +1264,10 @@ function summariseLog() {
     if (!byLevel.has(e.level)) byLevel.set(e.level, { tries: 0, won: 0, timeUp: 0, restarts: 0, best: null });
     const r = byLevel.get(e.level);
     if (e.result === 'extra-time' || e.result === 'restored') continue;
+    if (e.result === 'reset') {
+      r.restarts++;
+      continue;
+    }
     r.tries++;
     if (e.result === 'won') {
       r.won++;

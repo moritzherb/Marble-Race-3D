@@ -16,17 +16,17 @@ This page covers what the project can do with mobile ads, what was built, the pr
 - **Lives and coins came later** (see [economy.md](economy.md)). The rewarded ad is still offered when the clock runs out, for +20 s, next to the coin second chance. Taking it doesn't cost a life, like the coin version.
 - **An ad for a life is not built yet.** The natural place is the out-of-lives card, next to Buy a life: the ad manager would get a `watchForLife` like `watchForExtraTime`, calling `player` to add the life only after the reward event.
 - **The app ID is a placeholder:** `com.marblemachinerush.app` (in `capacitor.config.json`, `android/app/build.gradle` and the Xcode project). Pick the final one before you create the AdMob apps and store listings. It can't change after release.
-- The Fredoka font still loads from Google Fonts. Offline, the app falls back to the system's rounded font; everything else, three.js included, is bundled in the app.
+- The Nunito font still loads from Google Fonts. Offline, the app falls back to the system's rounded font; everything else, three.js included, is bundled in the app.
 
 ## What was built
 
 | | Behaviour |
 |---|---|
 | **Rewarded: extra time** | When the clock runs out, the Time's up card offers **Watch an ad for +20 s**. The level carries on exactly where it stopped, with 20 seconds on the clock. It's offered once per attempt; "Try again" starts a new attempt. |
-| **Rewarded: more coins** | After a win that paid coins, the Bravo screen offers a blue button with the range the ad can pay (say "60–150"). After the ad, a pointer lands on x2, x3 or x5, drawn by chance with the low ones more likely (`winMultiplier` in `economy.js`), and the extra coins are paid. Once per win (`rewardedCoins.maxPerWin`). |
+| **Rewarded: more coins** | After a win that paid coins, the Success screen offers a blue button showing what the ad would pay where the sweeping pointer is (say "90", then "150"). After the ad, a pointer lands on x2, x3 or x5, drawn by chance with the low ones more likely (`winMultiplier` in `economy.js`), and the extra coins are paid. Once per win (`rewardedCoins.maxPerWin`). |
 | Reward only when earned | Time or coins are added only when the SDK reports that the reward was earned (Google's `onUserEarnedReward`, the plugin's `onRewardedVideoAdReward`). Closing the ad, a failure to load or show, or a timeout grants nothing: a small "No reward" or "No ad" pops up, and the buttons stay. |
 | No double rewards | Pressing the button disables every button on the card until the ad is over. Only one ad request can be in flight, and the attempt's counter is checked again before the time is added. |
-| **Interstitial** | Only on **Next** from the Bravo screen, the break between levels. Never during a level, a marble run, the first ten (teaching) levels, or a menu. |
+| **Interstitial** | Only on **Next** from the Success screen, the break between levels. Never during a level, a marble run, the first ten (teaching) levels, or a menu. |
 | Frequency | One per 3 completed levels (counting from level 11). The count survives restarting the app. |
 | After a rewarded ad | No interstitial within 120 s of a rewarded ad, or after a level where extra time or the coin multiplier was used. |
 | Unavailable | If no interstitial is loaded, the player goes straight on and the next break tries again. Nothing waits for an ad to load. |
@@ -42,7 +42,7 @@ This page covers what the project can do with mobile ads, what was built, the pr
 | `prototype/src/ads.js` | The rules: frequency cap, reward-once, timeouts, retries, config merging. No SDK code, so it's tested in Node. |
 | `prototype/src/ads-admob.js` | The AdMob provider: consent, loading and showing through the Capacitor plugin, and turning its events into "shown / rewarded". |
 | `prototype/src/ads-sim.js` | Stand-in test ads for the browser build, used only while `TESTING.simulateAds` is on. |
-| `prototype/src/main.js` | The three hooks: the Time's up screen, the Bravo screen's multiplier, and Next. |
+| `prototype/src/main.js` | The three hooks: the Time's up screen, the Success screen's multiplier, and Next. |
 | `prototype/ads-config.json` | Settings, bundled with the app (below). |
 | `android/app/src/main/res/values/strings.xml` | Android AdMob **app** ID (`admob_app_id`). |
 | `ios/App/App/Info.plist` | iOS AdMob app ID (`GADApplicationIdentifier`), SKAdNetwork IDs, tracking prompt text. |

@@ -12,9 +12,9 @@ This prototype exists to answer one question before more is built: **can players
   ```
   It needs an internet connection the first time, to load three.js and the fonts.
 
-**How it plays:** the app opens on a home screen with the next level turning slowly behind a big Play button: Profile top left (an icon for now), coins, lives and Settings top right, Levels bottom right. From level 11 a start card offers power-ups before each level. A win shows a Bravo screen with stars and coins (and, in the app, an ad that multiplies them); Next goes back home. Settings has Sound, Vibration (on phones that support it) and Tips toggles, plus How to play. The look is glossy and colourful, with as little text as possible. There are 100 levels, and they unlock in order (during playtesting all of them are open: `TESTING.unlockAllLevels` in `prototype/src/config.js`, to switch off before release). They get steadily harder: the last ones take 13–15 moves and link two machines together.
+**How it plays:** the app opens on a home screen with the next level turning slowly behind a big Play button: Profile top left (an icon for now), lives and coins top centre, Settings top right, Levels bottom right. From level 11 a start card offers power-ups before each level. Restart puts the marbles back at the start; the clock keeps running and it never costs a life. A win shows a Success screen with stars, time and coins (and, in the app, an ad that multiplies them); Next goes back home. Settings has Sound, Vibration (on phones that support it) and Tips toggles, plus How to play. The look is glossy and colourful with a calm navy-and-gold finish, and as little text as possible. There are 100 levels, and they unlock in order (during playtesting all of them are open: `TESTING.unlockAllLevels` in `prototype/src/config.js`, to switch off before release). They get steadily harder: the last ones take 13–15 moves and link two machines together.
 
-**Lives, coins and power-ups:** you have 5 lives, and one comes back every 15 minutes, even with the game closed. Losing a level from 11 on costs one; levels 1–10 are free. Levels pay gold coins the first time you finish them, plus bonuses for 2 and 3 stars. Coins buy lives, a second chance when time runs out, and six power-ups from level 11: Extra Time, Speed Boost, Hint, Open All Gates, Magnetic Pull and Checkpoint. The rules and numbers are in [docs/economy.md](docs/economy.md).
+**Lives, coins and power-ups:** you have 5 lives, and one comes back every 15 minutes, even with the game closed. Losing a level from 11 on costs one, and so does leaving one after its first 10 seconds; levels 1–10 are free. Levels pay gold coins the first time you finish them, plus bonuses for 2 and 3 stars. Coins buy lives, a second chance when time runs out, and six power-ups from level 11: Extra Time, Speed Boost, Hint, Open All Gates, Magnetic Pull and Checkpoint. The rules and numbers are in [docs/economy.md](docs/economy.md).
 
 **Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal), R to restart, and Enter on the home screen to play.
 
@@ -41,7 +41,7 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 | `prototype/src/config.js` | Physics and control tuning values |
 | `prototype/src/render.js` | three.js scene: wood, grooves, marbles, gates, filters, portals, stairways, whirls, sky rails, camera |
 | `prototype/src/input.js` | Drag and keyboard to tilt |
-| `prototype/src/main.js` | Game flow, home screen, HUD, level start card, Bravo and Time's up screens, menus, playtest log |
+| `prototype/src/main.js` | Game flow, home screen, HUD, level start card, Success and Time's up screens, menus, playtest log |
 | `prototype/src/icons.js` | The glossy icon set (coins, hearts, stars, power-ups, buttons) |
 | `prototype/src/fx.js` | Small animations: icon pops, the breaking heart, flying coins |
 | `prototype/src/bonus.js` | The coin multiplier after a win (x2/x3/x5, low ones likelier) |

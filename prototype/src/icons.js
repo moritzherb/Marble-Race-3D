@@ -183,7 +183,7 @@ export const ICONS = {
     <path d="M8 8.5v12h12Z" fill="#fff" stroke="#5a3410" stroke-width="2.4" stroke-linejoin="round"/><path d="M19 22l5-3 5 3v6l-5 3-5-3Z" fill="url(#mm-gold)" stroke="#5a3410" stroke-width="1.8" stroke-linejoin="round"/></g>`),
 };
 
-// A heap of gold coins with sparkles, for the Bravo screen.
+// A heap of gold coins with sparkles.
 export const COIN_PILE = svg(
   `${[
     [52, 92], [92, 92], [132, 92], [70, 80], [114, 80], [92, 68],

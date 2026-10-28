@@ -20,7 +20,7 @@ Design specification for the player resource system. Every number here lives in 
 | At 5 lives | the countdown stops and nothing accumulates |
 | Levels that never cost a life | 1–10 (the teaching levels) |
 | Playing a level from 11 on needs | at least 1 life |
-| Free restart window | the first 10 seconds of play in an attempt |
+| Free window for leaving a level | the first 10 seconds of play in an attempt |
 
 ### What costs a life
 
@@ -32,8 +32,9 @@ An **attempt** is one try at a level, from the start (or from a restored checkpo
 | The clock runs out, and the player accepts it (Try again, Home, Back to checkpoint) | −1 |
 | The clock runs out, and the player continues with coins or a rewarded ad | none for now; the same attempt carries on |
 | The continued attempt runs out of time again | −1 (one failure, one life) |
-| Restart, Home or another level within the first 10 s of play | none |
-| Restart, Home or another level after that | −1, after a confirmation that says so |
+| Restart (the marbles go back to the start; the clock keeps running) | none: it's the same attempt |
+| Home or another level within the first 10 s of play | none |
+| Home or another level after that | −1, after a confirmation that says so |
 | Closing the game mid-attempt after the first 10 s, or on the Time's up card | −1, charged at the next launch, with a message saying why |
 | Watching the reference solution | none |
 | Restoring a checkpoint after a loss | −1 for the loss, then the restored attempt carries on |
@@ -121,8 +122,8 @@ A player with mostly two-star finishes has about 950 coins at level 20, enough t
 | A life | 150 | +1 life (up to 5) | any time below 5 |
 | Second chance | 90 | +15 s after the clock runs out | once per attempt |
 | Extra Time | 60 | +10 s now | once per attempt |
-| Speed Boost | 50 | all marbles 40% faster for 6 s | once per attempt |
-| Hint | 80 | the best next tilt, shown on the machine | 3 per attempt |
+| Speed Boost | 50 | all marbles 60% faster for 10 s | once per attempt |
+| Hint | 80 | which marble to move next, and where it will go | 3 per attempt |
 | Open All Gates | 140 | every gate and shutter open for 5 s | once per attempt |
 | Magnetic Pull | 160 | one marble pulled towards its own goal for 5 s | once per attempt |
 | Checkpoint | 220 | save this moment; after a loss, resume from it once | one saved at a time |
@@ -181,21 +182,22 @@ The card's options, in order:
 
 ### 2. Speed Boost
 
-- **Effect:** for 6 s, every marble rolls 40% faster. Gravity along the groove and the speed cap are both multiplied by 1.4; drag and bounces are unchanged.
+- **Effect:** for 10 s, every marble rolls 60% faster. Gravity along the groove and the speed cap are both multiplied by 1.6; drag and bounces are unchanged.
 - **All marbles:** one tilt moves every marble anyway, so boosting one would be hard to read and no fairer.
 - **Safe at speed:**
-  - The fastest marble moves 0.07 blocks per physics step, less than half a marble.
+  - The fastest marble moves 0.08 blocks per physics step, less than half a marble.
   - Gates are crossing-checked, goals are reached by the groove's end, and plates by position.
   - Nothing can skip a goal or tunnel through a gate.
-- **Visual:** marbles get a warm glow.
+- **Visual:** marbles get a warm glow, and a flickering lightning bolt lies under each one, pointing the way it rolls.
 
 ### 3. Hint
 
 **What it shows:**
 
-- **The arrow:** the best next tilt, as a large arrow lying over the machine. It's drawn in the machine's own space, so it stays correct when the view is turned.
-- **The text:** "Tilt this way and hold until everything stops."
-- **How long:** 4 s.
+- **The marble:** a white ring around the marble that matters most in the best next tilt (one that reaches its goal with it, otherwise the one that rolls furthest).
+- **Where it goes:** a trail of glowing dots along the grooves from that marble to where the tilt leaves it, with a see-through marble and a ring at the end. The trail comes from the same physics the game runs.
+- **The tilt:** a smaller arrow lying over the machine shows the direction. Everything is drawn in the machine's own space, so it stays correct when the view is turned.
+- **How long:** 5 s.
 - **The limit:** up to 3 per attempt.
 
 **Where it comes from:**
@@ -274,7 +276,7 @@ Once per attempt.
 **Limits:**
 
 - One restore per checkpoint, and one checkpoint saved at a time.
-- A checkpoint is dropped by a win, a full restart, leaving the level, or closing the game.
+- A checkpoint is dropped by a win, trying again after a loss, leaving the level, or closing the game.
 
 ### Considered and not included yet
 
@@ -287,22 +289,23 @@ Once per attempt.
 
 ## Interface
 
-The style is a casual mobile game: glossy, colourful icons (coin, heart, stars and one for each power-up, all in `icons.js`), chunky buttons and as little text as possible. Feedback is shown, not explained: a power-up's icon pops up when it starts, "+10s" floats up when time is added, and a heart cracks in two and falls with "−1" when a life is lost.
+The style is a casual mobile game with a quieter, more grown-up finish: glossy, colourful icons (coin, heart, stars and one for each power-up, all in `icons.js`), deep navy cards edged with a thin gold line, the Nunito font, and as little text as possible. Feedback is shown, not explained: a power-up's icon pops up when it starts, "+10s" floats up when time is added, and a heart cracks in two and falls with "−1" when a life is lost.
 
 - **Home screen:**
   - **Top left:** Profile (only the icon for now; a later update).
-  - **Top right, from the right edge:** Settings, then ♥ lives (with the next-life countdown, opens the lives card), then coins.
+  - **Top middle:** ♥ lives (with the next-life countdown, opens the lives card) and coins, side by side.
+  - **Top right:** Settings.
   - **Middle:** the game's name, the next machine turning slowly behind it, and "Level N" above a big green Play button. A hard level shows a flame and "Hard".
   - **Bottom right:** Levels.
   - **After a win,** Next brings the player here: the level number rolls on to the next one and the machine springs into place.
-- **Level start card** (from level 11): the level number, the stars earned so far, the time limit, and four power-ups to take into the level (Extra Time, Speed Boost, Hint, Open All Gates). Tap a tile to pick it (a green tick), tap again to drop it. Picks that the coins can't cover shake instead. The coins are taken, and the power-ups start, when the level starts. Each counts as that power-up's use for the attempt.
-- **Top of a level:** Pause (Resume, Home, Settings) on the left, the clock in the middle, coins and ♥ lives on the right.
+- **Level start card** (from level 11): Play on the home screen opens it over the home screen, with the machine still turning behind it. It shows the level number, the stars earned so far, the time limit, and four power-ups to take into the level (Extra Time, Speed Boost, Hint, Open All Gates). Tap a tile to pick it (a green tick), tap again to drop it. Picks that the coins can't cover shake instead. Its Play button starts the level: the coins are taken, and the picked power-ups pop on one after another in the row at the bottom. Each counts as that power-up's use for the attempt.
+- **Top of a level:** Pause (Resume, Home, Settings) on the left; ♥ lives, the clock and coins together in the middle.
 - **Bottom of a level:**
   - **The power-up row:** six tiles, each with its icon and price, above the view and Restart buttons. The tiles sit outside the 3D canvas, so a drag that tilts the machine can't press one, and a tap on a tile never tilts the machine.
   - **Tile states:** ready, too expensive (price in red), used up (grey), active (glow and a draining meter), or saved (Checkpoint).
   - **Tap to choose, tap again to use:** the first tap opens a small tag above the row with the name, a few words on the effect and a Use button. A second tap on the same tile, or Use, buys it. A stray tap never spends coins.
-  - **Restart** shows a "−1 ♥" tag once restarting would cost a life.
-- **Bravo (a win):** the stars pop in, then the coins won as a heap with "+30", which fly to the coin counter. Next goes home. With ads available, a bar of multipliers (x2 x3 x5 x3 x2) sits under the coins with a pointer sweeping across it, and a blue button shows what the ad could pay ("60–150"). After the ad, the pointer swings and lands on a multiplier drawn by chance (`winMultiplier` in `economy.js`: x2 60%, x3 30%, x5 10%, about x2.6 on average), and the extra coins are paid. A small replay button plays the level again.
+  - **Restart** puts every marble back where it started, for instance after one went into its goal too early. The clock keeps running, power-ups already used stay used, and it never costs a life.
+- **Success (a win):** it appears about a fifth of a second after the last marble goes in. "Success" in gold, the stars pop in, and a panel shows the time and the coins won, which fly to the coin counter. Next goes home. With ads available, a bar of multipliers (x2 x3 x5 x3 x2) sits under the panel with a pointer sweeping across it, and the blue ad button shows the coins the ad would pay where the pointer is, changing as it moves. After the ad, the pointer lands on a multiplier drawn by chance (`winMultiplier` in `economy.js`: x2 60%, x3 30%, x5 10%, about x2.6 on average), and the extra coins are paid. "Play again" under Next replays the level.
 - **Time's up:** a shaking clock and the marbles that made it home, then the ways to carry on: +15s for 90 coins, +20s for an ad, or back to a checkpoint. Home and Try again carry a "−1 ♥" tag when the loss costs a life, and the heart breaks when one of them is pressed.
 - **Lives, coins:** a big heart with the count and the countdown, or a big coin with the balance. "+1 ♥ for 150 coins" when lives aren't full.
 - **Level list:** numbered tiles with their stars: green when done, red with a flame for hard levels, grey with a padlock when locked.
@@ -318,8 +321,8 @@ The style is a casual mobile game: glossy, colourful icons (coin, heart, stars a
 | `prototype/src/route.js` | Shortest open route along the track, for Magnetic Pull |
 | `prototype/src/hints.js` + `prototype/hints/*.json` | Hint lookup and the per-level tables |
 | `prototype/src/sim.js` | Three small hooks: `sim.speedScale`, `gate.forced` and `marble.pull` |
-| `prototype/src/render.js` | Hint arrow, marble halo and glow, gate cables lit by what plates really do |
-| `prototype/src/main.js` | Screens and cards: HUD, power-up row, home screen, level start card, Bravo and Time's up |
+| `prototype/src/render.js` | Hint ring, trail and arrow, Speed Boost bolts, marble halo and glow, gate cables lit by what plates really do |
+| `prototype/src/main.js` | Screens and cards: HUD, power-up row, home screen, level start card, Success and Time's up |
 | `prototype/src/icons.js`, `fx.js` | The icon set, and the little animations (pops, the breaking heart, flying coins) |
 | `prototype/src/bonus.js` | The win multiplier: draws x2/x3/x5 with the configured chances |
 
@@ -354,7 +357,8 @@ Level progress and stars stay where they were (`mmr-progress`).
 - **The clock runs out:**
   - `lost` is set. The Time's up card can clear it (a continue) or charge it (accepting the loss).
 - **A win:** clears the attempt with no charge.
-- **Restart or leave:**
+- **Restart:** the same attempt carries on; nothing changes.
+- **Leave (Home or another level):**
   - while `staked`, the attempt is charged after a confirmation;
   - otherwise it's cleared for free.
 - **At launch:** an attempt left `staked` or `lost` is charged once, with a note.
@@ -389,7 +393,7 @@ Nothing in the game code outside `player.js` needs to change.
 | Activating a power-up twice | second tap refused (limit or already active), one charge | powerups.test |
 | Failing after a second chance | one life for the attempt, not two | player.test |
 | Winning with a power-up active | effects end, reward paid once | powerups.test |
-| Restarting in the free window, and after it | free, and −1 with a confirmation | player.test + browser check |
+| Leaving in the free window, and after it; Restart at any time | free, −1 with a confirmation; free | player.test + browser check |
 | Repeated completion event | second call pays nothing | player.test |
 | Closing the game mid-attempt or on the Time's up card | charged once at the next launch, with a note | player.test |
 | Interrupted purchase | single write: coins and item change together or not at all | player.test |
@@ -422,7 +426,7 @@ The system went in as five steps, each tested before the next. To check one by h
 
 - [ ] Home shows ♥ 5/5 · Full. Lose a life: it shows 4/5 and a 15:00 countdown that ticks.
 - [ ] Playtest tools → Skip 15 min brings the life back, and the countdown disappears at 5/5.
-- [ ] In level 11 or later, Restart within 10 s is free. After 10 s the button reads "Restart · −1 ♥" and asks first.
+- [ ] In level 11 or later, Home within 10 s is free; after 10 s it asks first and costs a life. Restart is always free: the marbles go back to the start and the clock keeps running.
 - [ ] Let the clock run out: the card says what accepting costs, and Try again takes exactly one life.
 - [ ] At 0 lives, Play on level 11+ opens Out of lives. Levels 1–10 still play.
 - [ ] Reload the page mid-level, after 10 s of play. A note says a life was used, and only once.
@@ -468,8 +472,8 @@ The system went in as five steps, each tested before the next. To check one by h
 
 - [ ] Level 11 opens with the level start card. The row sits under the machine.
 - [ ] The first tap on a token opens its tag without spending. A second tap uses it.
-- [ ] Extra Time adds 10 s once. Speed Boost glows the marbles for 6 s. Open All Gates lifts every gate for 5 s, then they return to what the plates say.
-- [ ] Hint draws an arrow over the machine. After a losing first move it says the level can't be won from here, and charges nothing.
+- [ ] Extra Time adds 10 s once. Speed Boost glows the marbles, with a bolt under each, for 10 s. Open All Gates lifts every gate for 5 s, then they return to what the plates say.
+- [ ] Hint rings one marble and draws a dotted trail to where the next tilt takes it, with a small arrow for the tilt. After a losing first move it says the level can't be won from here, and charges nothing.
 
 ### Step 5: Magnetic Pull and Checkpoint
 
@@ -484,7 +488,7 @@ The system went in as five steps, each tested before the next. To check one by h
 
 - [ ] Magnetic Pull asks which marble, and Cancel is free. A marble behind a shut gate is refused with no charge. A pulled marble gets a gold halo and heads for its goal. A full tilt the other way still wins.
 - [ ] Checkpoint saves with the time shown. Let the clock run out: Back to checkpoint · −1 ♥ restores the moment and the time, once. With only one life left it's disabled and explains why.
-- [ ] Finishing the level or restarting drops the checkpoint.
+- [ ] Finishing or leaving the level drops the checkpoint; Restart keeps it.
 
 ### What the automated tests cover
 

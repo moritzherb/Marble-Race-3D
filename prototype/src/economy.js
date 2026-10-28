@@ -36,8 +36,8 @@ export const ECONOMY = {
     // Shown in this order. `perAttempt` limits uses per try at a level.
     list: [
       { id: 'time', name: 'Extra Time', cost: 60, perAttempt: 1, seconds: 10, about: '+10 seconds' },
-      { id: 'speed', name: 'Speed Boost', cost: 50, perAttempt: 1, duration: 6, factor: 1.4, about: 'Faster marbles · 6 s' },
-      { id: 'hint', name: 'Hint', cost: 80, perAttempt: 3, duration: 4, about: 'Shows the next tilt' },
+      { id: 'speed', name: 'Speed Boost', cost: 50, perAttempt: 1, duration: 10, factor: 1.6, about: 'Faster marbles · 10 s' },
+      { id: 'hint', name: 'Hint', cost: 80, perAttempt: 3, duration: 5, about: 'Which marble to move, and where' },
       { id: 'gates', name: 'Open All Gates', cost: 140, perAttempt: 1, duration: 5, about: 'Every gate open · 5 s' },
       // strength: the pull as a fraction of a full tilt (a full tilt the other way still wins); maxRoute: blocks along the grooves.
       { id: 'magnet', name: 'Magnetic Pull', cost: 160, perAttempt: 1, duration: 5, strength: 0.6, maxRoute: 12, about: 'Pulls a marble home · 5 s' },

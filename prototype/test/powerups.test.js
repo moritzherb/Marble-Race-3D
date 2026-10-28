@@ -9,7 +9,7 @@ import { SIM_DT } from '../src/config.js';
 import { replay } from '../src/replay.js';
 import { createPlayer, memoryStorage } from '../src/player.js';
 import { createPowerUps } from '../src/powerups.js';
-import { ECONOMY } from '../src/economy.js';
+import { ECONOMY, powerUp } from '../src/economy.js';
 
 const level = (id) => LEVELS.find((l) => l.id === id);
 function setup(levelId = 'one-key-two-locks', coins) {
@@ -54,7 +54,8 @@ test('power-ups are locked before level 11 and when not playing', () => {
   assert.equal(powerups.activate('time', { ...ctx, playing: false }).reason, 'not now');
 });
 
-test('Speed Boost: marbles roll 40% further for 6 s, then back to normal; a double tap charges once', () => {
+test('Speed Boost: marbles roll faster for its duration, then back to normal; a double tap charges once', () => {
+  const { factor, duration } = powerUp('speed');
   const plain = setup('first-tilt').sim;
   const { player, powerups, sim, ctx } = setup('first-tilt');
   assert.equal(powerups.activate('speed', ctx).ok, true);
@@ -64,9 +65,9 @@ test('Speed Boost: marbles roll 40% further for 6 s, then back to normal; a doub
   roll(sim, 'E', 0.35);
   const moved = (s) => s.marbles[0].distance;
   assert.ok(moved(sim) > moved(plain) * 1.3, `${moved(sim)} vs ${moved(plain)}`);
-  assert.equal(sim.speedScale, 1.4);
-  powerups.tick(5.9, sim);
-  assert.equal(sim.speedScale, 1.4);
+  assert.equal(sim.speedScale, factor);
+  powerups.tick(duration - 0.1, sim);
+  assert.equal(sim.speedScale, factor);
   assert.deepEqual(powerups.tick(0.2, sim), ['speed']);
   assert.equal(sim.speedScale, 1);
 });
@@ -78,7 +79,7 @@ test('Speed Boost keeps every rule: each level\'s reference run still wins at bo
   for (const l of LEVELS.slice(0, 30)) {
     const track = buildTrack(l);
     const sim = createSim(track);
-    sim.speedScale = 1.4;
+    sim.speedScale = powerUp('speed').factor;
     const g = gravityInMachine(directionVector('E'));
     for (let t = 0; t < 3; t += SIM_DT) {
       stepSim(sim, SIM_DT, g);

@@ -326,7 +326,10 @@ function checkGoals(sim, events) {
     if (goal.filled) continue;
     const edge = sim.track.edges[goal.edge];
     for (const m of sim.marbles) {
-      if (m.delivered || m.lost || m.edge !== goal.edge || m.s < edge.L - 0.02) continue;
+      // Its own colour is home as soon as it is inside the cup; another colour bounces off
+      // the end of it.
+      if (m.delivered || m.lost || m.edge !== goal.edge) continue;
+      if (m.s < edge.L - (m.color === goal.color ? 0.1 : 0.02)) continue;
       if (m.color === goal.color) {
         m.delivered = true;
         m.v = 0;
