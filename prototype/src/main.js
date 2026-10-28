@@ -742,7 +742,7 @@ function titleSvg(text, color = 'gold') {
 
 const X = (act = 'close', label = 'Close') => `<button class="xbtn" data-act="${act}" type="button" aria-label="${label}"><svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>`;
 const walletHtml = (coins = player.coins(), lives = true) =>
-  `<div class="wallet"><span class="pill" id="resWallet">${ICONS.coin}<b id="resCoins">${coins}</b></span>${lives ? `<span class="pill lives">${ICONS.heart}<span class="heart-n ol">${player.lives().lives}</span></span>` : ''}</div>`;
+  `<div class="wallet"><span class="pill" id="resWallet">${ICONS.coin}<b id="resCoins">${coins}</b></span>${lives ? `<span class="pill">${ICONS.heart}<b>${player.lives().lives}</b></span>` : ''}</div>`;
 
 const SCREENS = {
   // Success: stars, then a panel with the time and the coins won (and an optional ad that

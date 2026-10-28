@@ -289,7 +289,7 @@ Once per attempt.
 
 ## Interface
 
-The style is a casual mobile game with a quieter, more grown-up finish: glossy, colourful icons (coin, heart, stars and one for each power-up, all in `icons.js`), deep navy cards edged with a thin gold line, the Nunito font, and as little text as possible. Feedback is shown, not explained: a power-up's icon pops up when it starts, "+10s" floats up when time is added, and a heart cracks in two and falls with "−1" when a life is lost.
+The style is a casual, playful mobile game: glossy, colourful icons (coin, heart, stars and one for each power-up, all in `icons.js`), chunky buttons, bright indigo cards with a gold trim, the round Baloo 2 font, and as little text as possible. Feedback is shown, not explained: a power-up's icon pops up when it starts, "+10s" floats up when time is added, and a heart cracks in two and falls with "−1" when a life is lost.
 
 - **Home screen:**
   - **Top left:** Profile (only the icon for now; a later update).

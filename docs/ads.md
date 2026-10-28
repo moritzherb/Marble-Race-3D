@@ -16,7 +16,7 @@ This page covers what the project can do with mobile ads, what was built, the pr
 - **Lives and coins came later** (see [economy.md](economy.md)). The rewarded ad is still offered when the clock runs out, for +20 s, next to the coin second chance. Taking it doesn't cost a life, like the coin version.
 - **An ad for a life is not built yet.** The natural place is the out-of-lives card, next to Buy a life: the ad manager would get a `watchForLife` like `watchForExtraTime`, calling `player` to add the life only after the reward event.
 - **The app ID is a placeholder:** `com.marblemachinerush.app` (in `capacitor.config.json`, `android/app/build.gradle` and the Xcode project). Pick the final one before you create the AdMob apps and store listings. It can't change after release.
-- The Nunito font still loads from Google Fonts. Offline, the app falls back to the system's rounded font; everything else, three.js included, is bundled in the app.
+- The Baloo 2 font still loads from Google Fonts. Offline, the app falls back to the system's rounded font; everything else, three.js included, is bundled in the app.
 
 ## What was built
 
