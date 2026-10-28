@@ -199,6 +199,8 @@ test('level rewards: base by chapter, half the base again for 2 and for 3 stars'
   assert.deepEqual(player.rewardFor(0), { base: 20, two: 10, three: 10, total: 40 });
   assert.deepEqual(player.rewardFor(19), { base: 30, two: 15, three: 15, total: 60 });
   assert.deepEqual(player.rewardFor(99), { base: 70, two: 35, three: 35, total: 140 });
+  // Hard levels pay half as much again (rounded to 5), and so do their star bonuses.
+  assert.deepEqual(player.rewardFor(19, { hard: true }), { base: 45, two: 25, three: 25, total: 95 });
   let sum = 0;
   for (let i = 0; i < 100; i++) sum += player.rewardFor(i).total;
   assert.equal(sum, 9600);

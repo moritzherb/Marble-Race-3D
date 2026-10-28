@@ -13,7 +13,7 @@ import { routeFor, pullFor } from './route.js';
 // rail physics is fully described by these numbers: there are no physics bodies to re-sync.
 export function snapshotOf(sim, play) {
   return {
-    marbles: sim.marbles.map((m) => ({ edge: m.edge, s: m.s, v: m.v, delivered: m.delivered, pos: [...m.pos], tangent: [...m.tangent], distance: m.distance })),
+    marbles: sim.marbles.map((m) => ({ edge: m.edge, s: m.s, v: m.v, delivered: m.delivered, lost: m.lost, stall: m.stall, pos: [...m.pos], tangent: [...m.tangent], distance: m.distance })),
     goals: sim.goals.map((g) => g.filled),
     plates: sim.plates.map((p) => p.pressed),
     gates: sim.gates.map((g) => ({ open: g.open, powered: g.powered })),

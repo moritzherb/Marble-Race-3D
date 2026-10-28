@@ -73,6 +73,7 @@ A gameplay currency, earned by playing and never sold for money. A real-money cu
 | First time with 2 stars | + half the base, rounded to 5 |
 | First time with 3 stars | + half the base, rounded to 5 |
 | Replays | only star bonuses not yet earned; nothing after 3 stars |
+| A hard level (🔥, about one in seven) | everything above × 1.5, rounded to 5 (`rewards.hardFactor`) |
 
 The base reward rises with the chapter, because the levels are ordered by difficulty:
 

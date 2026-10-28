@@ -1,8 +1,8 @@
 // Turns a drawn level into a finished levels.js entry:
 //   1. removes dead-end grooves no marble uses (and re-checks the puzzle didn't change),
 //   2. finds a tight reference solution and a trap for each losing opening (at most two),
-//   3. picks a time factor that keeps the limit between 20 and 60 seconds,
-//   4. runs the full audit.
+//   3. runs the full audit.
+// Every level has 20 seconds (replay.js), so the reference run has to be quick.
 //
 //   import { finalize, entrySource } from './finalize.mjs'
 
@@ -60,9 +60,7 @@ function withSolution(level, path, depth, maxStates) {
     const trap = [[dir, Math.max(2, Math.ceil(r.hold * 10) / 10)], ...tight.solution];
     if (!replay(level, trap, { maxTime: 60 }).won) traps.push(trap);
   }
-  let factor = level.timeFactor || 2.5;
-  while (Math.ceil(tight.time * factor + 10) > 60 && factor > 1.2) factor = Math.round((factor - 0.1) * 10) / 10;
-  return { ...level, timeFactor: factor, solution: tight.solution, traps: traps.length ? traps : undefined, refTime: tight.time };
+  return { ...level, solution: tight.solution, traps: traps.length ? traps : undefined, refTime: tight.time };
 }
 
 export function finalize(def, { depth = 16, maxStates = 20000, log = () => {} } = {}) {
@@ -82,7 +80,7 @@ export function finalize(def, { depth = 16, maxStates = 20000, log = () => {} } 
       const p = profile(trial, depth, maxStates);
       if (!p || p.moves !== base.moves || JSON.stringify(p.locks) !== JSON.stringify(base.locks)) continue;
       log(`${def.id}: removed unused dead end at ${cell}`);
-      level = withSolution({ ...trial, timeFactor: def.timeFactor }, p.path, depth, maxStates);
+      level = withSolution(trial, p.path, depth, maxStates);
       base = p;
       removed = true;
       break;
@@ -108,7 +106,7 @@ export function entrySource(level) {
   ];
   if (level.bands && Object.keys(level.bands).length) lines.push(`    bands: { ${Object.entries(level.bands).map(([k, v]) => `${k}: ${q(v)}`).join(', ')} },`);
   lines.push(`    marbles: [${level.marbles.map((m) => `{ color: ${q(m.color)}, at: [${m.at.join(', ')}] }`).join(', ')}],`);
-  lines.push(`    timeFactor: ${level.timeFactor},`);
+  if (level.hard) lines.push(`    hard: true,`);
   lines.push(`    solution: ${steps(level.solution)},`);
   if (level.traps?.length) lines.push(`    traps: [${level.traps.map(steps).join(', ')}],`);
   lines.push(`  },`);

@@ -18,6 +18,8 @@ export const ECONOMY = {
     baseByChapter: [20, 30, 35, 40, 45, 50, 55, 60, 65, 70],
     // Paid once each, the first time a level reaches 2 stars and 3 stars: this fraction of the base.
     starBonus: 0.5,
+    // Hard levels (the flame ones, every 7 or so) pay this much more, rounded to 5.
+    hardFactor: 1.5,
   },
   prices: {
     life: 150,

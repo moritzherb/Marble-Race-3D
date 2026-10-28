@@ -3,7 +3,7 @@
 import { LEVELS } from './levels.js';
 import { PHYSICS, CONTROLS, SIM_DT, TESTING } from './config.js';
 import { buildTrack } from './track.js';
-import { createSim, stepSim, isWon } from './sim.js';
+import { createSim, stepSim, isWon, isLost } from './sim.js';
 import { createTilt, updateTilt, gravityInMachine, directionVector } from './tilt.js';
 import { replay, levelTimes } from './replay.js';
 import { createView, MARBLE_COLORS } from './render.js';
@@ -196,6 +196,7 @@ function restart(logIt = true) {
   if (game.screen === 'game') player.startAttempt(game.level.id, game.index);
   else player.clearAttempt();
   game.staked = false;
+  game.failReason = null;
   game.sim = createSim(game.track);
   game.tilt = createTilt();
   game.phase = 'playing';
@@ -228,7 +229,7 @@ function win() {
     recordResult(game.level.id, stars, t);
     logAttempt('won', stars);
     ads.levelCompleted(game.index + 1);
-    reward = player.grantLevel(game.level.id, game.index, stars);
+    reward = player.grantLevel(game.level.id, game.index, stars, { hard: Boolean(game.level.hard) });
     updateLives();
     // Home then offers the level after this one, or the first unfinished one if that is further on.
     game.nextUp = Math.max(game.index + 1 < LEVELS.length ? game.index + 1 : 0, nextLevelIndex());
@@ -240,15 +241,19 @@ function win() {
   }, 650);
 }
 
-function fail() {
+// The clock ran out, or (reason 'fell') a marble fell off a sky rail into nothing.
+function fail(reason = 'time') {
   game.phase = 'failed';
-  game.timeLeft = 0;
+  game.failReason = reason;
+  if (reason === 'time') game.timeLeft = 0;
   endPowerUps();
   releaseTilt();
   if (!game.autoplay) player.loseAttempt();
-  if (!game.autoplay) logAttempt('time-up');
+  if (!game.autoplay) logAttempt(reason === 'fell' ? 'fell' : 'time-up');
   audio.playEvent({ type: 'fail' });
-  openCard('fail');
+  // Let the marble be seen falling first.
+  if (reason === 'fell') setTimeout(() => game.phase === 'failed' && game.failReason === 'fell' && openCard('fail'), 900);
+  else openCard('fail');
 }
 
 // Extra time after the clock ran out (coins or a rewarded ad): pick the level up where it stopped.
@@ -563,6 +568,7 @@ function tick(dt) {
       if (game.timeLeft <= 5 && Math.ceil(game.timeLeft) < Math.ceil(before) && game.timeLeft > 0) audio.playEvent({ type: 'tick' });
     }
     if (isWon(game.sim)) win();
+    else if (isLost(game.sim)) fail('fell');
     else if (game.timeLeft <= 0) fail();
     updateClock();
   }
@@ -713,16 +719,18 @@ const SCREENS = {
     <div class="minor"><button class="gbtn cream round" data-act="retry" type="button" aria-label="Play again">${ICONS.restart}</button></div>`;
   },
   // Time's up: carry on (coins, an ad or a checkpoint), or accept the loss.
+  // Time's up, or a marble fell (then more time wouldn't help: only a checkpoint or a retry).
   fail: ({ noAd = false } = {}) => {
+    const fell = game.failReason === 'fell';
     const sc = ECONOMY.secondChance;
-    const scOk = !game.autoplay && game.attempt.secondChance < sc.perAttempt;
+    const scOk = !fell && !game.autoplay && game.attempt.secondChance < sc.perAttempt;
     const short = player.coins() < sc.cost;
-    const adOk = !noAd && !game.autoplay && ads.canOfferExtraTime(game.attempt);
+    const adOk = !fell && !noAd && !game.autoplay && ads.canOfferExtraTime(game.attempt);
     const risk = player.attemptAtRisk() ? lifeTag() : '';
     return `
     ${walletHtml()}
-    ${titleSvg("Time's up!", 'red')}
-    <div class="shake">${ICONS.clock}</div>
+    ${titleSvg(fell ? 'Oops!' : "Time's up!", 'red')}
+    <div class="shake">${fell ? ICONS.fall : ICONS.clock}</div>
     <div class="chips" aria-label="Marbles home">${chipsHtml()}</div>
     <div class="stack">
       ${scOk ? `<button class="gbtn" data-act="secondChance" data-spend type="button"${short ? ' disabled' : ''} aria-label="${sc.seconds} more seconds for ${sc.cost} coins">${ICONS.time}+${sc.seconds}s <span class="cost">${ICONS.coin}${sc.cost}</span></button>` : ''}

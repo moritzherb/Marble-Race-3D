@@ -33,15 +33,18 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 |---|---|
 | `prototype/src/pieces.js` | The block kit: each piece's rail lines, in its own local space |
 | `prototype/src/track.js` | Turns a level into a track network; adds support blocks; reports level mistakes |
-| `prototype/src/sim.js` | Rail physics and the rules: junctions, plates, gates, goals, marble collisions |
+| `prototype/src/sim.js` | Rail physics and the rules: junctions and crossings, plates, gates, filters, goals, stairways, sky-rail falls, marble collisions |
 | `prototype/src/tilt.js` | Machine tilt, direction snapping, gravity in machine coordinates |
 | `prototype/src/levels.js` | The hundred levels, with reference solutions and traps |
 | `prototype/src/grid.js` | Turns a level drawn as text (levels 11 onwards) into pieces |
-| `prototype/src/replay.js` | Plays a solution headlessly; derives each level's timers |
+| `prototype/src/replay.js` | Plays a solution headlessly; the 20-second clock and each level's star times |
 | `prototype/src/config.js` | Physics and control tuning values |
-| `prototype/src/render.js` | three.js scene: wood, grooves, marbles, gates, camera |
+| `prototype/src/render.js` | three.js scene: wood, grooves, marbles, gates, filters, portals, stairways, whirls, sky rails, camera |
 | `prototype/src/input.js` | Drag and keyboard to tilt |
-| `prototype/src/main.js` | Game flow, HUD, menus, playtest log |
+| `prototype/src/main.js` | Game flow, home screen, HUD, level start card, Bravo and Time's up screens, menus, playtest log |
+| `prototype/src/icons.js` | The glossy icon set (coins, hearts, stars, power-ups, buttons) |
+| `prototype/src/fx.js` | Small animations: icon pops, the breaking heart, flying coins |
+| `prototype/src/bonus.js` | The coin multiplier after a win (x2/x3/x5, low ones likelier) |
 | `prototype/src/economy.js` | Every number for lives, coins, rewards and power-ups |
 | `prototype/src/player.js` | Lives and their regeneration, gold coins, level rewards, and which attempts cost a life; one saved object |
 | `prototype/src/powerups.js` | Power-up rules, charging and effects, and checkpoints |
@@ -51,9 +54,10 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 | `prototype/src/moves.js` | Whole moves (tilt until everything stops), shared by the game's hints and the tools |
 | `prototype/src/ads.js` | Ad rules for the app builds: rewarded extra time, interstitial frequency, timeouts |
 | `prototype/src/ads-admob.js` | Google AdMob (with consent) through the Capacitor plugin |
+| `prototype/src/ads-sim.js` | Labelled stand-in ads for playtesting in a browser (`TESTING.simulateAds`) |
 
 ## Adding a level
-1. Add an entry to `DRAWN` in `prototype/src/levels.js`. Draw each tier of the machine as rows of characters (`─ │ ┌ ┐ └ ┘ ┬ ┴ ├ ┤ ┼` for grooves, `*` or `╴ ╵ ╶ ╷` for dead ends, `b o g p r` for goals, `A B C` for plates, `1 2 3` for their gates, `x y z` for shutters, `> < v ^` for ramps). The full key is at the top of `prototype/src/grid.js`.
+1. Add an entry to `DRAWN` in `prototype/src/levels.js`. Draw each tier of the machine as rows of characters (`─ │ ┌ ┐ └ ┘ ┬ ┴ ├ ┤ ┼` for grooves, `*` or `╴ ╵ ╶ ╷` for dead ends, `b o g p r` for goals, `A B C` for plates, `1 2 3` for their gates, `x y z` for shutters, `> < v ^` for ramps, `⇒ ⇐ ⇓ ⇑` for stairways, `ⓑ ⓞ ⓖ ⓟ ⓡ` for colour filters, `% &` for portal pairs, `@` for a whirl, `━ ┃` and `╸ ╹ ╺ ╻` for sky rails). The full key is at the top of `prototype/src/grid.js`.
 2. Use only the blocks the track needs; add a plain block (`#`) only where parts would otherwise float apart. Wood may only sit on top of a straight groove, which then becomes a visible tunnel; wood over a curve, junction or ramp is reported as an error.
 3. Run `npm run solve -- <level number>`. It prints the fewest moves, which opening moves make the level unwinnable, and a tight reference solution to paste in as `solution`. Add a losing opening as a `trap`.
 4. Run `npm run audit -- <level number>`. It checks that every lock has a purpose (jamming it open must make the level shorter or break every shortcut), that no gate, plate or goal goes unused, and how forgiving the level is.

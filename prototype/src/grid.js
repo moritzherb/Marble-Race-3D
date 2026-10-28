@@ -106,10 +106,12 @@ export function compileMap(level) {
 
   // A gate runs along whichever axis a fixed-shape groove meets it on.
   const fixedSides = (x, y, z) => GROOVES[at(x, y, z)]?.[2] || '';
+  // A whirl takes a groove from any side, so it counts as meeting a gate beside it.
+  const isWhirl = (x, y, z) => at(x, y, z) === '@' || (at(x, y, z) === '~' && at(x, y + 1, z) === '@');
   const gateAxis = (x, y, z) => {
     const meets = (side) => {
       const [dx, dz] = SIDES[side];
-      return fixedSides(x + dx, y, z + dz).includes(OPPOSITE[side]) || rampEnds.get(key(x, y, z))?.has(side);
+      return fixedSides(x + dx, y, z + dz).includes(OPPOSITE[side]) || rampEnds.get(key(x, y, z))?.has(side) || isWhirl(x + dx, y, z + dz);
     };
     if (meets('E') || meets('W')) return 'ew';
     if (meets('N') || meets('S')) return 'ns';

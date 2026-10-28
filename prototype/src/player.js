@@ -117,11 +117,11 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
   const isFree = (levelIndex) => levelIndex < L.freeLevels;
 
   // A level's coins: the base for the first completion, and a bonus the first time it reaches
-  // 2 stars and 3 stars.
-  function rewardFor(levelIndex) {
+  // 2 stars and 3 stars. Hard levels pay more.
+  function rewardFor(levelIndex, { hard = false } = {}) {
     const R = config.rewards;
     const chapter = Math.min(R.baseByChapter.length - 1, Math.floor(levelIndex / R.levelsPerChapter));
-    const base = R.baseByChapter[chapter];
+    const base = hard ? Math.round((R.baseByChapter[chapter] * (R.hardFactor || 1)) / 5) * 5 : R.baseByChapter[chapter];
     const bonus = Math.round((base * R.starBonus) / 5) * 5;
     return { base, two: bonus, three: bonus, total: base + 2 * bonus };
   }
@@ -200,14 +200,14 @@ export function createPlayer({ storage = browserStorage(), now = () => Date.now(
     coins: () => read((s) => s.coins),
     rewardFor,
     // Coins still to earn on a level: what a first completion with 3 stars would pay now.
-    remaining: (levelId, levelIndex) =>
-      read((s) => tiers(rewardFor(levelIndex)).filter((x) => x.tier > (s.paid[levelId] || 0)).reduce((sum, x) => sum + x.amount, 0)),
+    remaining: (levelId, levelIndex, opts) =>
+      read((s) => tiers(rewardFor(levelIndex, opts)).filter((x) => x.tier > (s.paid[levelId] || 0)).reduce((sum, x) => sum + x.amount, 0)),
     // A completed level pays the tiers it hasn't paid yet, so repeating it (or a repeated
     // completion event) pays nothing more.
-    grantLevel: (levelId, levelIndex, stars) =>
+    grantLevel: (levelId, levelIndex, stars, opts) =>
       update((s, t) => {
         const already = s.paid[levelId] || 0;
-        const parts = tiers(rewardFor(levelIndex)).filter((x) => x.tier > already && x.tier <= stars);
+        const parts = tiers(rewardFor(levelIndex, opts)).filter((x) => x.tier > already && x.tier <= stars);
         const total = parts.reduce((sum, x) => sum + x.amount, 0);
         if (parts.length) s.paid[levelId] = Math.max(already, ...parts.map((x) => x.tier));
         if (total) {

@@ -155,6 +155,11 @@ export const ICONS = {
     <circle cx="24" cy="27" r="12.5" fill="#fff" stroke="#5a1408" stroke-width="2"/>
     <path d="M24 19v8.5l5.5 3.5" fill="none" stroke="#16213d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     ${gloss(15, 17, 4, 2.4, -40, 0.8)}`),
+  fall: svg(`
+    <path d="M9 6v9M16 3v8M33 3v8M40 6v9" stroke="#2f93f2" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+    <circle cx="24" cy="26" r="13" fill="url(#mm-blue)" stroke="#0e3a85" stroke-width="2.6"/>
+    ${gloss(19.5, 20.5, 4, 2.4, -35, 0.85)}
+    <path d="M17 44q7-4 14 0" fill="none" stroke="#0e3a85" stroke-width="2.6" stroke-linecap="round" opacity=".4"/>`),
   lock: svg(`
     <path d="M15 22v-6.5a9 9 0 0 1 18 0V22" fill="none" stroke="#3a3f55" stroke-width="7"/>
     <path d="M15 22v-6.5a9 9 0 0 1 18 0V22" fill="none" stroke="url(#mm-silver)" stroke-width="3.5"/>

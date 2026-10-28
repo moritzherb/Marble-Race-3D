@@ -99,6 +99,12 @@ export function playEvent(e) {
     case 'win':
       [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.09, 0.4, 0.13));
       break;
+    case 'drop':
+      thud(420, 0.1, 0.45);
+      break;
+    case 'fall':
+      [880, 660, 494, 330].forEach((f, i) => tone(f, t + i * 0.08, 0.14, 0.11, 'triangle'));
+      break;
     case 'fail':
       tone(220, t, 0.3, 0.15, 'triangle');
       tone(165, t + 0.18, 0.45, 0.15, 'triangle');

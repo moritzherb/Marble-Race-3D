@@ -19,7 +19,9 @@ for (const [i, level] of LEVELS.entries()) {
     assert.equal(run.won, true, 'reference solution did not deliver every marble');
     const times = levelTimes(level, run.time);
     assert.ok(run.time <= times.gold, `took ${run.time.toFixed(2)}s, gold is ${times.gold}s`);
-    assert.ok(times.limit >= 20 && times.limit <= 60, `time limit ${times.limit}s is outside 20-60s`);
+    assert.equal(times.limit, 20);
+    // Room for a person: the expert run leaves at least six seconds on the clock.
+    assert.ok(run.time <= 14, `the reference run takes ${run.time.toFixed(1)}s of the 20`);
   });
 
   // A gate nobody ever reaches is decoration, not a lock (the audit checks it matters).
