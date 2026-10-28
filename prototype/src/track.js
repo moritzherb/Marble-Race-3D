@@ -76,7 +76,7 @@ function countParts(occupied) {
 }
 
 export function buildTrack(level) {
-  const errors = [];
+  const errors = [...(level.mapErrors || [])];
   const occupied = new Map();
   const placed = [];
 

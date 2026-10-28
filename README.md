@@ -12,7 +12,7 @@ This prototype exists to answer one question before more is built: **can players
   ```
   It needs an internet connection the first time, to load three.js and the fonts.
 
-**How it plays:** the app opens on a home screen with your next level turning slowly in the background. Tap the big level button at the bottom to play. The gear opens Settings: Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. Levels unlock in order.
+**How it plays:** the app opens on a home screen with your next level turning slowly in the background. Tap the big level button at the bottom to play. The gear opens Settings: Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. There are 50 levels, and they unlock in order.
 
 **Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal), R to restart, and Enter on the home screen to play.
 
@@ -33,7 +33,8 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 | `prototype/src/track.js` | Turns a level into a track network; adds support blocks; reports level mistakes |
 | `prototype/src/sim.js` | Rail physics and the rules: junctions, plates, gates, goals, marble collisions |
 | `prototype/src/tilt.js` | Machine tilt, direction snapping, gravity in machine coordinates |
-| `prototype/src/levels.js` | The ten levels, with reference solutions and traps |
+| `prototype/src/levels.js` | The fifty levels, with reference solutions and traps |
+| `prototype/src/grid.js` | Turns a level drawn as text (levels 11 onwards) into pieces |
 | `prototype/src/replay.js` | Plays a solution headlessly; derives each level's timers |
 | `prototype/src/config.js` | Physics and control tuning values |
 | `prototype/src/render.js` | three.js scene: wood, grooves, marbles, gates, camera |
@@ -41,14 +42,14 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 | `prototype/src/main.js` | Game flow, HUD, menus, playtest log |
 
 ## Adding a level
-1. Add an entry to `LEVELS` in `prototype/src/levels.js`. The comment at the top of that file explains piece rotations.
-2. Write its `solution` as a list of `[direction, seconds]` steps, and any `traps` that should fail.
-3. Use only the blocks the track needs; add a plain block (`blocks: [[x, y, z]]`) only where parts would otherwise float apart.
-4. Run `npm test`. It reports open groove ends, overlapping blocks, a machine in separate parts, missing goals, and whether the solution works.
+1. Add an entry to `DRAWN` in `prototype/src/levels.js`. Draw each tier of the machine as rows of characters (`─ │ ┌ ┐ └ ┘ ┬ ┴ ├ ┤ ┼` for grooves, `╴ ╵ ╶ ╷` for dead ends, `b o g p r` for goals, `A B C` for plates, `1 2 3` for their gates, `> < v ^` for ramps). The full key is at the top of `prototype/src/grid.js`.
+2. Use only the blocks the track needs; add a plain block (`#`) only where parts would otherwise float apart.
+3. Run `npm run solve -- <level number>`. It prints the fewest moves, which opening moves make the level unwinnable, and a tight reference solution to paste in as `solution`. Add a losing opening as a `trap`.
+4. Run `npm test`. It reports open groove ends, overlapping blocks, a machine in separate parts, missing goals, and whether the solution and traps behave.
 
 ## Docs
 - [docs/design.md](docs/design.md): decisions from the concept review (signature mechanic, rules, controls, visual direction)
-- [docs/levels.md](docs/levels.md): the first ten levels
+- [docs/levels.md](docs/levels.md): all fifty levels, with timings and move counts
 - [docs/playtest.md](docs/playtest.md): the first playtest script and go/no-go signals
 
 ## Publishing the phone build

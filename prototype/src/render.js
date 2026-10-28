@@ -598,7 +598,7 @@ export function createView(canvas) {
         const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
         const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.45, emissive: color, emissiveIntensity: 0 });
         const cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.016, 6), mat);
-        cable.castShadow = true;
+        cable.castShadow = false; // a thin cable's shadow on the ground just looks like a stray line
         content.add(cable);
         const beads = [0, 1, 2].map(() => {
           const bead = new THREE.Mesh(beadGeo, new THREE.MeshBasicMaterial({ color: 0xfff3cf }));
