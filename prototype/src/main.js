@@ -12,6 +12,8 @@ import * as audio from './audio.js';
 import { loadSettings, saveSettings, loadProgress, recordResult, resetProgress, loadLog, appendLog, clearLog, adStore } from './store.js';
 import { createAds, loadAdConfig } from './ads.js';
 import { admobProvider, nativePlatform } from './ads-admob.js';
+import { createPlayer, clockText } from './player.js';
+import { ECONOMY } from './economy.js';
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_PHYSICS = { ...PHYSICS };
@@ -54,6 +56,11 @@ async function startAds() {
   const config = await loadAdConfig({ fetchJson, store: adStore });
   await ads.attach(admobProvider(config), config);
 }
+
+// Lives (and later coins): see player.js and docs/economy.md.
+const player = createPlayer();
+const HEART = '<svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.2s-7.6-4.7-9.7-9.4C.8 8.3 2.9 4.4 6.7 4.4c2.1 0 3.6 1.2 5.3 3.3 1.7-2.1 3.2-3.3 5.3-3.3 3.8 0 5.9 3.9 4.4 7.4-2.1 4.7-9.7 9.4-9.7 9.4z"/></svg>';
+const livesLine = ({ lives, max, nextIn }) => (nextIn === null ? `${lives}/${max} · Full` : `${lives}/${max} · Next life in ${clockText(nextIn)}`);
 
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
 
@@ -111,6 +118,10 @@ function showHome() {
 
 function play(index = game.index) {
   if (!isUnlocked(loadProgress(), index)) return;
+  if (!player.canPlay(index)) {
+    openCard('noLives');
+    return;
+  }
   audio.unlock();
   leaveAttempt();
   closeCard();
@@ -125,6 +136,12 @@ function play(index = game.index) {
 
 function restart(logIt = true) {
   if (logIt && game.screen === 'game' && game.phase === 'playing' && !game.autoplay && (game.elapsed > 0.3 || game.tilts > 0)) logAttempt('restarted');
+  // Whatever path got here, an attempt that was under way (or lost) is charged once. The
+  // buttons that lead here ask first (see requestGiveUp).
+  if (player.attemptAtRisk()) player.chargeAttempt();
+  if (game.screen === 'game') player.startAttempt(game.level.id, game.index);
+  else player.clearAttempt();
+  game.staked = false;
   game.sim = createSim(game.track);
   game.tilt = createTilt();
   game.phase = 'playing';
@@ -138,11 +155,13 @@ function restart(logIt = true) {
   $('banner').hidden = true;
   renderChips();
   updateClock();
+  updateLives();
   view.sync(game.sim, game.tilt.current, 0);
 }
 
 function win() {
   game.phase = 'won';
+  player.clearAttempt();
   releaseTilt();
   const t = game.elapsed;
   const stars = t <= game.times.gold ? 3 : t <= game.times.par ? 2 : 1;
@@ -163,6 +182,7 @@ function fail() {
   game.phase = 'failed';
   game.timeLeft = 0;
   releaseTilt();
+  if (!game.autoplay) player.loseAttempt();
   if (!game.autoplay) logAttempt('time-up');
   audio.playEvent({ type: 'fail' });
   openCard('fail');
@@ -170,6 +190,7 @@ function fail() {
 
 // The rewarded ad paid out: pick the level up where the clock stopped.
 function continueWithExtraTime(seconds) {
+  player.resumeAttempt();
   closeCard();
   game.phase = 'playing';
   game.timeLeft = seconds;
@@ -187,6 +208,52 @@ const AD_MESSAGES = {
   unavailable: 'No ad is available right now, so no extra time this round. You can try the level again.',
   'closed-early': 'The ad closed before the end, so there\'s no extra time this round. You can try the level again.',
 };
+
+// Restarting or leaving an attempt that is under way costs a life, so ask first.
+let pendingGiveUp = null;
+function requestGiveUp(kind, action) {
+  if (game.screen === 'game' && game.phase === 'playing' && !game.autoplay && player.attemptAtRisk()) {
+    pendingGiveUp = action;
+    openCard('giveUp', { kind });
+  } else {
+    closeCard();
+    action();
+  }
+}
+
+// Try the current level again: the old attempt is charged if it has to be, and with no
+// lives left the out-of-lives card shows instead.
+function retryLevel() {
+  closeCard();
+  if (player.attemptAtRisk()) player.chargeAttempt();
+  if (!player.canPlay(game.index)) {
+    showHome();
+    openCard('noLives');
+    return;
+  }
+  restart(false);
+}
+
+// On the Time's up card: what accepting the loss costs.
+function lossNote() {
+  if (player.isFreeLevel(game.index)) return '';
+  const { lives } = player.lives();
+  const first = !player.seen('lives');
+  if (first) player.markSeen('lives');
+  return `<p class="note">Trying again or going home costs 1 life: you'll have ${lives - 1} of ${ECONOMY.lives.max}.${first ? ` Lives come back one every ${ECONOMY.lives.regenMinutes} minutes, even with the game closed.` : ''}</p>`;
+}
+
+function updateLives() {
+  const info = player.lives();
+  $('livesCount').textContent = info.lives;
+  $('homeLivesText').textContent = livesLine(info);
+  $('homeLives').setAttribute('aria-label', `Lives: ${livesLine(info)}`);
+  const timer = document.getElementById('livesTimer');
+  if (timer) timer.textContent = info.nextIn === null ? 'Full' : `Next life in ${clockText(info.nextIn)}`;
+  const atRisk = game.staked && game.phase === 'playing';
+  $('restartBtn').innerHTML = atRisk ? `Restart <span class="cost">· −1 ${HEART}</span>` : 'Restart';
+}
+setInterval(updateLives, 500);
 
 // While an ad runs, every button on the card is disabled so nothing can be pressed twice.
 function lockCard(locked) {
@@ -231,13 +298,13 @@ attachInput($('stage'), {
 $('playBtn').addEventListener('click', () => play());
 $('homeLevels').addEventListener('click', () => openCard('levels', { from: 'home' }));
 $('homeSettings').addEventListener('click', () => openCard('settings'));
-$('homeBtn').addEventListener('click', () => !game.adShowing && showHome());
+$('homeBtn').addEventListener('click', () => !game.adShowing && requestGiveUp('leave', showHome));
+$('homeLives').addEventListener('click', () => openCard('lives'));
 $('settingsBtn').addEventListener('click', () => openCard('settings'));
 $('restartBtn').addEventListener('click', () => {
   if (game.adShowing) return;
   audio.unlock();
-  closeCard();
-  restart();
+  requestGiveUp('restart', retryLevel);
 });
 $('orbitLeft').addEventListener('click', () => view.orbit(-1));
 $('orbitRight').addEventListener('click', () => view.orbit(1));
@@ -247,9 +314,8 @@ window.addEventListener('keydown', (e) => {
   else if (game.screen === 'home' && !game.card && (e.code === 'Enter' || e.code === 'Space')) {
     e.preventDefault();
     play();
-  } else if (game.screen === 'game' && e.code === 'KeyR' && !e.repeat && !game.adShowing) {
-    closeCard();
-    restart();
+  } else if (game.screen === 'game' && e.code === 'KeyR' && !e.repeat && !game.adShowing && !MENU_CARDS.has(game.card)) {
+    requestGiveUp('restart', retryLevel);
   } else if ((e.code === 'KeyN' || e.code === 'Enter') && game.card === 'win' && !game.adShowing) {
     ACTIONS.next();
   }
@@ -279,6 +345,11 @@ function tick(dt) {
     game.acc -= SIM_DT;
   }
   if (game.screen === 'game' && game.phase === 'playing') {
+    if (!game.staked && !game.autoplay && game.elapsed >= ECONOMY.lives.freeRestartSeconds && !player.isFreeLevel(game.index)) {
+      game.staked = true;
+      player.stakeAttempt();
+      updateLives();
+    }
     if (game.timerRunning) {
       const before = game.timeLeft;
       game.timeLeft -= dt;
@@ -377,7 +448,7 @@ const LOCK =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>';
 
 // Cards opened from a menu pause the game; win and time-up cards don't need to.
-const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools']);
+const MENU_CARDS = new Set(['levels', 'settings', 'howto', 'tools', 'giveUp', 'lives', 'noLives', 'notice']);
 const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator;
 
 function openCard(kind, data = {}) {
@@ -404,8 +475,13 @@ const ACTIONS = {
   close: () => closeCard(),
   retry: () => {
     if (game.adShowing) return;
+    retryLevel();
+  },
+  giveUp: () => {
+    const go = pendingGiveUp;
+    pendingGiveUp = null;
     closeCard();
-    restart(false);
+    go?.();
   },
   // A break between levels: the only place an interstitial may show.
   next: async () => {
@@ -439,13 +515,30 @@ const ACTIONS = {
   home: () => {
     if (!game.adShowing) showHome();
   },
+  livesBack: () => (game.screen === 'game' && game.phase !== 'playing' ? showHome() : closeCard()),
   settings: () => openCard('settings'),
   howto: () => openCard('howto'),
   tools: () => openCard('tools'),
   levels: () => openCard('levels', { from: 'tools' }),
   levelsBack: () => (game.levelsFrom === 'tools' ? openCard('tools') : closeCard()),
-  pick: (el) => play(Number(el.dataset.i)),
-  solution: () => watchSolution(),
+  pick: (el) => requestGiveUp('leave', () => play(Number(el.dataset.i))),
+  solution: () => requestGiveUp('leave', watchSolution),
+  lifeMinus: () => {
+    player.setLives(player.lives().lives - 1);
+    openCard('tools');
+  },
+  lifeFill: () => {
+    player.setLives(ECONOMY.lives.max);
+    openCard('tools');
+  },
+  lifeSkip: () => {
+    player.skipTime(ECONOMY.lives.regenMinutes);
+    openCard('tools');
+  },
+  resetEconomy: () => {
+    player.reset();
+    openCard('tools');
+  },
   copyLog: (el) => {
     const text = JSON.stringify(loadLog(), null, 1);
     const fallback = () => {
@@ -504,11 +597,51 @@ const CARDS = {
     <p>${home} of ${game.sim.marbles.length} marbles made it home.</p>
     ${offer ? `<button class="btn wide" data-act="watchAd" type="button">Watch an ad for +${ads.config.rewardedExtraTime.seconds} s</button>` : ''}
     <p class="note" role="status">${adMessage || game.level.learn}</p>
+    ${lossNote()}
     <div class="row">
       <button class="btn" data-act="home" type="button">Home</button>
       <button class="btn primary" data-act="retry" type="button">Try again</button>
     </div>`;
   },
+  // Asked before restarting or leaving an attempt that would cost a life.
+  giveUp: ({ kind }) => {
+    const { lives } = player.lives();
+    return `
+    <h2>${kind === 'restart' ? 'Restart this level?' : 'Leave this level?'}</h2>
+    <p>You've been playing for more than ${ECONOMY.lives.freeRestartSeconds} seconds, so giving up this attempt costs 1 life. You have ${lives}.</p>
+    <div class="row">
+      <button class="btn" data-act="close" type="button">Keep playing</button>
+      <button class="btn primary" data-act="giveUp" type="button">${kind === 'restart' ? 'Restart' : 'Leave'} <span class="cost">· −1 ${HEART}</span></button>
+    </div>`;
+  },
+  lives: () => {
+    const info = player.lives();
+    return `
+    <div class="card-head"><h2>Lives</h2>
+      <button class="close-btn" data-act="livesBack" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></button></div>
+    <div class="big-stat">${HEART}<span>${info.lives}/${info.max}</span></div>
+    <p class="countdown" id="livesTimer">${info.nextIn === null ? 'Full' : `Next life in ${clockText(info.nextIn)}`}</p>
+    <ul class="howto">
+      <li>Losing a level costs 1 life. Completing one never does.</li>
+      <li>Restarting within the first ${ECONOMY.lives.freeRestartSeconds} seconds is free.</li>
+      <li>A life comes back every ${ECONOMY.lives.regenMinutes} minutes, up to ${info.max}, even with the game closed.</li>
+      <li>Levels 1–${ECONOMY.lives.freeLevels} never cost a life.</li>
+    </ul>
+    <button class="btn primary wide" data-act="livesBack" type="button">OK</button>`;
+  },
+  noLives: () => {
+    const info = player.lives();
+    return `
+    <h2>Out of lives</h2>
+    <div class="big-stat">${HEART}<span>${info.lives}/${info.max}</span></div>
+    <p class="countdown" id="livesTimer">${info.nextIn === null ? 'Full' : `Next life in ${clockText(info.nextIn)}`}</p>
+    <p>A life comes back every ${ECONOMY.lives.regenMinutes} minutes, even with the game closed. Levels 1–${ECONOMY.lives.freeLevels} are free to replay meanwhile.</p>
+    <div class="row"><button class="btn primary" data-act="livesBack" type="button">Wait</button></div>`;
+  },
+  notice: ({ title, text }) => `
+    <h2>${title}</h2>
+    <p>${text}</p>
+    <div class="row"><button class="btn primary" data-act="close" type="button">OK</button></div>`,
   levels: ({ from }) => {
     game.levelsFrom = from;
     const progress = loadProgress();
@@ -570,6 +703,11 @@ const CARDS = {
         <button type="button" data-set="directionAssist" data-v="true" aria-pressed="${settings.directionAssist}">On</button>
         <button type="button" data-set="directionAssist" data-v="false" aria-pressed="${!settings.directionAssist}">Off</button>
       </span></div>
+    <div class="setting"><label>Lives<small>${livesLine(player.lives())}</small></label>
+      <span class="row"><button class="btn small" data-act="lifeMinus" type="button">−1</button>
+      <button class="btn small" data-act="lifeSkip" type="button">Skip ${ECONOMY.lives.regenMinutes} min</button>
+      <button class="btn small" data-act="lifeFill" type="button">Fill</button>
+      <button class="btn small" data-act="resetEconomy" type="button">Reset</button></span></div>
     <div class="setting"><label>Ads<small>${adStatus()}</small></label></div>
     <div class="setting"><label>Progress<small>Locks every level but the first again, for the next tester</small></label>
       <span class="row"><button class="btn small" data-act="levels" type="button">Levels</button>
@@ -655,7 +793,7 @@ function wireSettings(card) {
       CONTROLS.directionAssist = settings.directionAssist;
       audio.setSoundEnabled(settings.sound);
       for (const sib of card.querySelectorAll(`[data-set="${key}"]`)) sib.setAttribute('aria-pressed', String(sib === b));
-      if (key === 'timerStart') restart(false);
+      if (key === 'timerStart' && !player.attemptAtRisk()) restart(false);
     });
   }
   for (const input of card.querySelectorAll('input[type=range]')) {
@@ -693,6 +831,7 @@ function summariseLog() {
 
 function start(data = {}) {
   view.resize();
+  const left = player.recover();
   if (data.screen === 'game' && typeof data.index === 'number' && isUnlocked(loadProgress(), data.index)) {
     play(data.index);
   } else {
@@ -703,6 +842,10 @@ function start(data = {}) {
     requestAnimationFrame(frame);
   });
   startAds().catch(() => {});
+  if (left.charged) {
+    const level = LEVELS.find((l) => l.id === left.level);
+    openCard('notice', { title: 'A life was used', text: `The game closed during ${level ? `level ${LEVELS.indexOf(level) + 1}, ${level.name}` : 'a level'}, so that attempt cost a life.` });
+  }
 }
 
 const hot = window.claude?.hot;
@@ -711,4 +854,4 @@ if (hot?.ready) hot.ready(start);
 else start(hot?.data ?? {});
 
 // For automated checks and debugging in the browser console.
-window.__mmr = { game, play, showHome, restart, LEVELS, view, ads };
+window.__mmr = { game, play, showHome, restart, LEVELS, view, ads, player };
