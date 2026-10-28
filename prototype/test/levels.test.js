@@ -9,6 +9,14 @@ test('level ids are unique', () => {
   assert.equal(new Set(ids).size, ids.length);
 });
 
+test('an extra-hard level comes every 5 to 10 levels after the first ten', () => {
+  const hard = LEVELS.map((l, i) => (l.hard ? i + 1 : null)).filter(Boolean);
+  assert.ok(hard.length >= 9, `only ${hard.length} hard levels`);
+  assert.ok(hard[0] > 10 && hard[0] <= 20, `the first hard level is ${hard[0]}`);
+  hard.slice(1).forEach((n, k) => assert.ok(n - hard[k] >= 5 && n - hard[k] <= 10, `hard levels ${hard[k]} and ${n}`));
+  assert.ok(100 - hard.at(-1) <= 10, `the last hard level is ${hard.at(-1)}`);
+});
+
 for (const [i, level] of LEVELS.entries()) {
   test(`${i + 1}. ${level.name}: builds without errors`, () => {
     assert.deepEqual(buildTrack(level).errors, []);
