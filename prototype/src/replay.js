@@ -34,10 +34,10 @@ export function replay(level, solution = level.solution, { maxTime = 120, onStep
   return { won: isWon(sim), time: t, errors: [], sim, events };
 }
 
-// Every level gets the same 20 seconds. The stars come from the reference solution (an
+// Every level gets the same 30 seconds. The stars come from the reference solution (an
 // expert's run), so they stay fair if the physics is retuned: 3 stars within a second of
 // it, 2 stars within half as long again (and never at the very end of the clock).
-export const TIME_LIMIT = 20;
+export const TIME_LIMIT = 30;
 export function levelTimes(level, solutionTime) {
   const gold = Math.ceil(solutionTime + 1);
   return {

@@ -37,7 +37,7 @@ Plain JavaScript modules. Only the renderer uses three.js; everything else runs 
 | `prototype/src/tilt.js` | Machine tilt, direction snapping, gravity in machine coordinates |
 | `prototype/src/levels.js` | The hundred levels, with reference solutions and traps |
 | `prototype/src/grid.js` | Turns a level drawn as text (levels 11 onwards) into pieces |
-| `prototype/src/replay.js` | Plays a solution headlessly; the 20-second clock and each level's star times |
+| `prototype/src/replay.js` | Plays a solution headlessly; the 30-second clock and each level's star times |
 | `prototype/src/config.js` | Physics and control tuning values |
 | `prototype/src/render.js` | three.js scene: wood, grooves, marbles, gates, filters, portals, stairways, whirls, sky rails, camera |
 | `prototype/src/input.js` | Drag and keyboard to tilt |

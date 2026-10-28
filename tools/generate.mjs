@@ -200,8 +200,9 @@ export function evaluate(skel, a, { depth = 12, maxStates = 3000 } = {}) {
   const { wins } = solve(sim, depth, 30, maxStates);
   if (!wins.length) return { score: -1, why: 'no solution found' };
   const moves = wins[0].length;
-  // Every level has 20 seconds: the search's own run (tilts held until everything stops) is
-  // about a fifth longer than an expert's, so anything much over 16.5 s won't fit in 13.5.
+  // Reference runs are kept under 14 s of the 30-second clock: the search's own run (tilts
+  // held until everything stops) is about a fifth longer than an expert's, so anything much
+  // over 16.5 s won't fit in 13.5.
   const runTime = (w) => w.reduce((t, st, i) => t + st.hold + (i < w.length - 1 ? st.release : 0), 0);
   const fastest = Math.min(...wins.map(runTime));
   if (fastest > (skel.maxRun || 16.5)) return { score: -1, why: `too slow (${fastest.toFixed(1)} s)`, moves };

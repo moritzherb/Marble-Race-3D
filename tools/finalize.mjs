@@ -2,7 +2,7 @@
 //   1. removes dead-end grooves no marble uses (and re-checks the puzzle didn't change),
 //   2. finds a tight reference solution and a trap for each losing opening (at most two),
 //   3. runs the full audit.
-// Every level has 20 seconds (replay.js), so the reference run has to be quick.
+// Every level has 30 seconds (replay.js); the reference run is kept under 14 s so a person has time to think.
 //
 //   import { finalize, entrySource } from './finalize.mjs'
 

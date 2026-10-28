@@ -28,7 +28,7 @@ const CUP_FLAT = 0.18; // goals and plates sit in a round cup: radius of its fla
 const CUP_RADIUS = 0.27; // ...and of its rim at the block top
 const FLOOR = RAIL_TO_TOP - CHANNEL_DEPTH; // groove floor, measured from the rail line
 const CARVE_STEPS = 24; // surface grid points per block on carved tops
-const MARBLE_VIEW_R = 0.17; // drawn a little larger than the physics radius
+const MARBLE_VIEW_R = 0.18; // drawn a little larger than the physics radius
 const MARBLE_LIFT = FLOOR + MARBLE_VIEW_R; // so it rests on the groove floor
 const RIM_RADIUS = 0.255; // coloured ring around a goal or plate cup
 const DEFAULT_YAW = (-24 * Math.PI) / 180;
@@ -558,7 +558,7 @@ export function createView(canvas) {
   let current = null; // per-level objects
   let clock = 0;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  const view = { yaw: DEFAULT_YAW, targetYaw: DEFAULT_YAW, pitch: (50 * Math.PI) / 180, distance: 12, targetDistance: 12, center: new THREE.Vector3(), spin: false };
+  const view = { yaw: DEFAULT_YAW, targetYaw: DEFAULT_YAW, pitch: (50 * Math.PI) / 180, distance: 12, targetDistance: 12, shift: 0, targetShift: 0, center: new THREE.Vector3(), spin: false };
 
   function clearLevel() {
     if (!pivot) return;
@@ -1032,9 +1032,10 @@ export function createView(canvas) {
     cam.far = size * 4;
     cam.updateProjectionMatrix();
 
-    current = { track, goals, plates, gates, cables, marbles, portals, stairs, nopes: [], inTunnel, hint: null };
+    current = { track, goals, plates, gates, cables, marbles, portals, stairs, nopes: [], inTunnel, hint: null, fitPts: fitPoints(track) };
     fitCamera();
     view.distance = view.targetDistance;
+    view.shift = view.targetShift;
   }
 
   function cameraBasis(yaw) {
@@ -1047,37 +1048,60 @@ export function createView(canvas) {
   // Pick a camera distance so the whole machine fits, with room for the HUD. While the
   // camera circles (home screen) it uses the distance that fits from every side, so the
   // zoom stays still instead of pumping in and out.
+  // The camera also slides sideways so the machine's outline, not its bounding box, is
+  // centred (not while circling, where every side has to fit).
   function fitCamera() {
     if (!current) return;
-    let d = distanceFor(view.targetYaw);
-    if (view.spin) for (let k = 0; k < 24; k++) d = Math.max(d, distanceFor(view.yaw + (k * Math.PI) / 12));
+    let { d, off } = distanceFor(view.targetYaw, !view.spin);
+    if (view.spin) for (let k = 0; k < 24; k++) d = Math.max(d, distanceFor(view.yaw + (k * Math.PI) / 12, false).d);
     view.targetDistance = d;
+    view.targetShift = view.spin ? 0 : off;
   }
 
-  function distanceFor(yaw) {
-    const { min, max } = current.track.bounds;
+  // The corners of every block, with a little headroom for gates and cables: the camera fits
+  // the machine itself, not its bounding box, so L- and T-shaped machines fill the screen.
+  function fitPoints(track) {
+    const pts = new Map();
+    for (const key of track.cellOwner.keys()) {
+      const [x, y, z] = key.split(',').map(Number);
+      for (const dx of [-0.05, 1.05]) for (const dz of [-0.05, 1.05]) for (const dy of [0, 1.3]) pts.set(`${x + dx},${y + dy},${z + dz}`, [x + dx, y + dy, z + dz]);
+    }
+    return [...pts.values()];
+  }
+
+  function distanceFor(yaw, centred) {
     const { fwd, right, up } = cameraBasis(yaw);
     const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2) * 0.8);
-    const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect * 0.96;
-    let d = 4;
-    const pad = 0.25;
+    const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect * 0.97;
     const p = new THREE.Vector3();
-    for (const x of [min[0] - pad, max[0] + pad]) {
-      for (const y of [min[1], max[1] + 0.4]) {
-        for (const z of [min[2] - pad, max[2] + pad]) {
-          p.set(x, y, z).sub(view.center);
-          const depth = p.dot(fwd);
-          d = Math.max(d, Math.abs(p.dot(right)) / tanH - depth, Math.abs(p.dot(up)) / tanV - depth);
-        }
+    // How far to slide sideways: halfway between the outline's left and right edges, as seen
+    // along the line of sight.
+    let off = 0;
+    if (centred) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const q of current.fitPts) {
+        p.set(q[0], q[1], q[2]).sub(view.center);
+        lo = Math.min(lo, p.dot(right));
+        hi = Math.max(hi, p.dot(right));
       }
+      off = (lo + hi) / 2;
     }
-    return d;
+    let d = 4;
+    for (const q of current.fitPts) {
+      p.set(q[0], q[1], q[2]).sub(view.center);
+      const depth = p.dot(fwd);
+      d = Math.max(d, Math.abs(p.dot(right) - off) / tanH - depth, Math.abs(p.dot(up)) / tanV - depth);
+    }
+    return { d, off };
   }
 
+  const lookAt = new THREE.Vector3();
   function placeCamera() {
-    const { fwd } = cameraBasis(view.yaw);
-    camera.position.copy(view.center).addScaledVector(fwd, -view.distance);
-    camera.lookAt(view.center.x, view.center.y - 0.15, view.center.z);
+    const { fwd, right } = cameraBasis(view.yaw);
+    lookAt.copy(view.center).addScaledVector(right, view.shift);
+    camera.position.copy(lookAt).addScaledVector(fwd, -view.distance);
+    camera.lookAt(lookAt.x, lookAt.y - 0.15, lookAt.z);
   }
 
   const tmpQ = new THREE.Quaternion();
@@ -1464,6 +1488,7 @@ export function createView(canvas) {
       view.yaw += (view.targetYaw - view.yaw) * Math.min(1, dt * 9);
     }
     view.distance += (view.targetDistance - view.distance) * Math.min(1, dt * 5);
+    view.shift += (view.targetShift - view.shift) * Math.min(1, dt * 5);
     placeCamera();
     renderer.render(scene, camera);
   }

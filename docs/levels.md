@@ -9,7 +9,7 @@ Levels 11–100 started as hand-drawn machines. `tools/generate.mjs` searched ea
 - **Every lock has a purpose.** The audit jams each gate (or shutter) open and solves again. "Costs" means the level gets shorter with that lock open; "reroutes" means the shortest solutions with it open all fail in the real level, so the lock forces a different plan. The generator does the same for each colour filter and portal pair. A piece that changes nothing is cut.
 - **Nothing is decoration.** Every gate, plate and goal is used by the reference solution or a designed trap.
 - **People can repeat it.** The reference solution still wins with every hold and pause made longer and less precise (six randomised replays).
-- **It fits the clock.** Every level has 20 seconds, and an expert's reference run takes at most 14 of them.
+- **It leaves time to think.** Every level has 30 seconds, and an expert's reference run takes at most 14 of them.
 - **Tunnels show.** Wood may only sit on a straight groove, which then gets a visible tunnel opening.
 
 ## Difficulty
@@ -34,9 +34,9 @@ New pieces get a level of their own before they're combined:
 - sky rails at 47 (Sky Bridges);
 - a sky rail that ends over a groove, to drop down a tier, at 54 (Drop Zone).
 
-The clock is the same for everyone: **20 seconds**. The stars come from the reference solution, so they stay fair when the physics is retuned:
+The clock is the same for everyone: **30 seconds**. The stars come from the reference solution, so they stay fair when the physics is retuned:
 
-- **2 stars (par)** = solution × 1.5 + 2 s (at most 18 s)
+- **2 stars (par)** = solution × 1.5 + 2 s (at most 28 s)
 - **3 stars (gold)** = solution + 1 s
 
 | # | Level | Marbles | Size (w×d, tiers) | New pieces | Fewest moves | Losing openings | Dead positions | Reference | Par | Gold |
@@ -60,11 +60,11 @@ The clock is the same for everyone: **20 seconds**. The stars come from the refe
 | 17 | Colour Check | 2 | 7×5, 1 | colour filter | 4 | 0 | 0% | 7.1 s | 13 s | 9 s |
 | 18 | Backbone | 3 | 5×7, 1 | – | 4 | 1 | 13% | 4.5 s | 9 s | 6 s |
 | 19 | Gatekeeper | 2 | 8×4, 1 | – | 4 | 1 | 8% | 6.4 s | 12 s | 8 s |
-| 20 | H-Frame | 3 | 7×7, 1 | – | 6 | 0 | 0% | 12.5 s | 18 s | 14 s |
+| 20 | H-Frame | 3 | 7×7, 1 | – | 6 | 0 | 0% | 12.5 s | 21 s | 14 s |
 | 21 | Downhill Swap | 2 | 7×5, 2 | – | 3 | 4 | 79% | 5.1 s | 10 s | 7 s |
 | 22 | Gate and Shutter 🔥 | 2 | 7×3, 1 | shutter | 7 | 0 | 11% | 8.5 s | 15 s | 10 s |
 | 23 | Pendulum and Siding | 4 | 7×9, 1 | – | 5 | 1 | 25% | 8.8 s | 16 s | 10 s |
-| 24 | Wormhole | 3 | 7×4, 1 | portals | 5 | 0 | 0% | 13.0 s | 18 s | 14 s |
+| 24 | Wormhole | 3 | 7×4, 1 | portals | 5 | 0 | 0% | 13.0 s | 22 s | 14 s |
 | 25 | Top and Bottom | 3 | 9×5, 1 | shutter | 4 | 0 | 0% | 8.7 s | 16 s | 10 s |
 | 26 | Crossing Guard | 3 | 6×7, 1 | – | 5 | 0 | 1% | 7.9 s | 14 s | 9 s |
 | 27 | Shunting Yard | 3 | 9×5, 1 | – | 5 | 0 | 0% | 10.0 s | 18 s | 12 s |
@@ -72,7 +72,7 @@ The clock is the same for everyone: **20 seconds**. The stars come from the refe
 | 29 | Comb Over 🔥 | 3 | 9×3, 1 | colour filter, portals | 6 | 0 | 44% | 10.2 s | 18 s | 12 s |
 | 30 | Lollipop | 3 | 9×7, 1 | – | 5 | 0 | 20% | 9.4 s | 17 s | 11 s |
 | 31 | Traffic Circle | 3 | 7×7, 1 | – | 5 | 0 | 1% | 9.6 s | 17 s | 11 s |
-| 32 | Ring Road | 3 | 9×5, 1 | shutter | 5 | 0 | 0% | 11.4 s | 18 s | 13 s |
+| 32 | Ring Road | 3 | 9×5, 1 | shutter | 5 | 0 | 0% | 11.4 s | 20 s | 13 s |
 | 33 | First Floor | 3 | 12×3, 2 | stairway | 4 | 1 | 72% | 5.1 s | 10 s | 7 s |
 | 34 | Ladder | 3 | 5×7, 1 | – | 6 | 2 | 31% | 9.3 s | 16 s | 11 s |
 | 35 | Shortcut | 3 | 9×5, 1 | colour filter, portals | 6 | 0 | 11% | 9.8 s | 17 s | 11 s |
@@ -80,13 +80,13 @@ The clock is the same for everyone: **20 seconds**. The stars come from the refe
 | 37 | Drawbridge | 3 | 6×3, 1 | – | 6 | 0 | 2% | 7.6 s | 14 s | 9 s |
 | 38 | Shut, Then Open | 2 | 6×3, 1 | shutter | 6 | 0 | 9% | 7.8 s | 14 s | 9 s |
 | 39 | Trident | 3 | 5×7, 1 | – | 6 | 0 | 0% | 7.3 s | 13 s | 9 s |
-| 40 | Whirlpool | 3 | 7×6, 2 | whirl | 8 | 0 | 30% | 11.0 s | 18 s | 13 s |
-| 41 | Silver Key | 2 | 9×7, 1 | – | 6 | 1 | 17% | 11.0 s | 18 s | 12 s |
+| 40 | Whirlpool | 3 | 7×6, 2 | whirl | 8 | 0 | 30% | 11.0 s | 19 s | 13 s |
+| 41 | Silver Key | 2 | 9×7, 1 | – | 6 | 1 | 17% | 11.0 s | 19 s | 12 s |
 | 42 | Two Rings | 3 | 9×5, 1 | – | 6 | 1 | 8% | 8.3 s | 15 s | 10 s |
 | 43 | Back of the Queue 🔥 | 3 | 7×5, 1 | shutter | 8 | 0 | 2% | 10.5 s | 18 s | 12 s |
 | 44 | Never Both | 3 | 9×5, 1 | shutter | 6 | 0 | 0% | 10.2 s | 18 s | 12 s |
-| 45 | Crossbars | 3 | 7×7, 1 | – | 8 | 0 | 0% | 14.0 s | 18 s | 15 s |
-| 46 | Waterfall | 3 | 5×8, 3 | – | 7 | 0 | 53% | 10.7 s | 18 s | 12 s |
+| 45 | Crossbars | 3 | 7×7, 1 | – | 8 | 0 | 0% | 14.0 s | 23 s | 15 s |
+| 46 | Waterfall | 3 | 5×8, 3 | – | 7 | 0 | 53% | 10.7 s | 19 s | 12 s |
 | 47 | Sky Bridges | 3 | 10×3, 1 | sky rail | 7 | 0 | 1% | 9.7 s | 17 s | 11 s |
 | 48 | Loophole | 3 | 9×5, 1 | colour filter, portals | 6 | 0 | 11% | 9.8 s | 17 s | 11 s |
 | 49 | Merry-Go-Round | 3 | 7×7, 1 | – | 7 | 0 | 1% | 9.5 s | 17 s | 11 s |
@@ -96,21 +96,21 @@ The clock is the same for everyone: **20 seconds**. The stars come from the refe
 | 53 | Orange Door | 3 | 9×5, 1 | colour filter, portals | 7 | 0 | 1% | 10.5 s | 18 s | 12 s |
 | 54 | Drop Zone | 3 | 8×3, 2 | sky rail, drop | 7 | 1 | 80% | 8.5 s | 15 s | 10 s |
 | 55 | Either Side | 3 | 7×5, 1 | shutter | 7 | 0 | 2% | 9.2 s | 16 s | 11 s |
-| 56 | Warp Comb | 3 | 9×3, 1 | portals | 6 | 0 | 11% | 12.8 s | 18 s | 14 s |
+| 56 | Warp Comb | 3 | 9×3, 1 | portals | 6 | 0 | 11% | 12.8 s | 22 s | 14 s |
 | 57 | Crosscurrent 🔥 | 3 | 7×6, 2 | whirl | 6 | 5 | 85% | 9.5 s | 17 s | 11 s |
 | 58 | Push and Pull | 2 | 7×3, 1 | shutter | 7 | 1 | 11% | 9.5 s | 17 s | 11 s |
 | 59 | Tower | 3 | 7×8, 3 | – | 5 | 1 | 77% | 6.6 s | 12 s | 8 s |
-| 60 | Falls | 3 | 5×8, 3 | – | 7 | 0 | 72% | 11.9 s | 18 s | 13 s |
-| 61 | Changing of the Guard | 3 | 7×7, 1 | – | 7 | 0 | 1% | 10.9 s | 18 s | 12 s |
-| 62 | Three Turnstiles | 3 | 9×5, 1 | – | 6 | 0 | 73% | 11.8 s | 18 s | 13 s |
-| 63 | Pitchfork | 3 | 5×7, 1 | – | 6 | 1 | 37% | 11.0 s | 18 s | 12 s |
+| 60 | Falls | 3 | 5×8, 3 | – | 7 | 0 | 72% | 11.9 s | 20 s | 13 s |
+| 61 | Changing of the Guard | 3 | 7×7, 1 | – | 7 | 0 | 1% | 10.9 s | 19 s | 12 s |
+| 62 | Three Turnstiles | 3 | 9×5, 1 | – | 6 | 0 | 73% | 11.8 s | 20 s | 13 s |
+| 63 | Pitchfork | 3 | 5×7, 1 | – | 6 | 1 | 37% | 11.0 s | 19 s | 12 s |
 | 64 | Orange Escort 🔥 | 3 | 9×5, 2 | colour filter, stairway | 8 | 4 | 67% | 9.7 s | 17 s | 11 s |
 | 65 | Climbing Frame | 3 | 5×7, 1 | – | 7 | 0 | 1% | 10.4 s | 18 s | 12 s |
 | 66 | Green Door | 3 | 9×5, 1 | colour filter, portals | 7 | 0 | 1% | 10.1 s | 18 s | 12 s |
 | 67 | Midfield | 3 | 7×5, 1 | shutter | 8 | 0 | 1% | 10.1 s | 18 s | 12 s |
 | 68 | Steps | 3 | 7×5, 1 | – | 7 | 0 | 1% | 10.0 s | 17 s | 11 s |
-| 69 | Lock Below | 3 | 7×6, 2 | – | 6 | 2 | 47% | 11.6 s | 18 s | 13 s |
-| 70 | Orange Crossing | 3 | 10×3, 1 | colour filter, sky rail | 8 | 0 | 7% | 11.0 s | 18 s | 12 s |
+| 69 | Lock Below | 3 | 7×6, 2 | – | 6 | 2 | 47% | 11.6 s | 20 s | 13 s |
+| 70 | Orange Crossing | 3 | 10×3, 1 | colour filter, sky rail | 8 | 0 | 7% | 11.0 s | 19 s | 12 s |
 | 71 | Freefall 🔥 | 3 | 8×3, 2 | colour filter, sky rail, drop | 8 | 6 | 79% | 8.2 s | 15 s | 10 s |
 | 72 | Night Shift | 3 | 9×3, 1 | – | 7 | 2 | 31% | 10.5 s | 18 s | 12 s |
 | 73 | Last One In | 3 | 9×3, 1 | shutter | 6 | 3 | 51% | 10.3 s | 18 s | 12 s |
@@ -118,29 +118,29 @@ The clock is the same for everyone: **20 seconds**. The stars come from the refe
 | 75 | Round Trip | 3 | 9×5, 2 | stairway, whirl | 6 | 2 | 36% | 9.9 s | 17 s | 11 s |
 | 76 | Narrow Pass | 2 | 8×3, 1 | – | 8 | 2 | 17% | 10.6 s | 18 s | 12 s |
 | 77 | Tree | 3 | 9×7, 1 | – | 7 | 0 | 41% | 10.2 s | 18 s | 12 s |
-| 78 | Escalator 🔥 | 3 | 9×5, 2 | stairway | 9 | 2 | 80% | 12.8 s | 18 s | 14 s |
-| 79 | Hold the Line | 2 | 7×3, 1 | shutter | 8 | 0 | 8% | 11.1 s | 18 s | 13 s |
-| 80 | Rope Ladder | 3 | 5×7, 1 | – | 8 | 0 | 11% | 12.7 s | 18 s | 14 s |
+| 78 | Escalator 🔥 | 3 | 9×5, 2 | stairway | 9 | 2 | 80% | 12.8 s | 22 s | 14 s |
+| 79 | Hold the Line | 2 | 7×3, 1 | shutter | 8 | 0 | 8% | 11.1 s | 19 s | 13 s |
+| 80 | Rope Ladder | 3 | 5×7, 1 | – | 8 | 0 | 11% | 12.7 s | 22 s | 14 s |
 | 81 | Zigzag Up | 3 | 7×5, 1 | – | 8 | 0 | 10% | 10.2 s | 18 s | 12 s |
-| 82 | Orange Gap | 3 | 10×3, 1 | colour filter, sky rail | 8 | 0 | 7% | 11.0 s | 18 s | 12 s |
-| 83 | Ellipse | 3 | 9×5, 1 | – | 9 | 1 | 7% | 11.5 s | 18 s | 13 s |
+| 82 | Orange Gap | 3 | 10×3, 1 | colour filter, sky rail | 8 | 0 | 7% | 11.0 s | 19 s | 12 s |
+| 83 | Ellipse | 3 | 9×5, 1 | – | 9 | 1 | 7% | 11.5 s | 20 s | 13 s |
 | 84 | Upper Deck | 3 | 9×6, 2 | – | 5 | 6 | 97% | 9.9 s | 17 s | 11 s |
-| 85 | Comb 🔥 | 3 | 9×3, 1 | – | 11 | 0 | 21% | 13.6 s | 18 s | 15 s |
+| 85 | Comb 🔥 | 3 | 9×3, 1 | – | 11 | 0 | 21% | 13.6 s | 23 s | 15 s |
 | 86 | Landing | 3 | 12×3, 2 | stairway | 7 | 2 | 76% | 8.5 s | 15 s | 10 s |
-| 87 | Grand Machine | 5 | 7×9, 2 | – | 7 | 2 | 58% | 14.0 s | 18 s | 15 s |
+| 87 | Grand Machine | 5 | 7×9, 2 | – | 7 | 2 | 58% | 14.0 s | 23 s | 15 s |
 | 88 | Halfway House | 3 | 7×5, 1 | shutter | 8 | 1 | 2% | 9.4 s | 17 s | 11 s |
-| 89 | Deep Lock | 3 | 7×6, 2 | – | 7 | 3 | 67% | 11.0 s | 18 s | 12 s |
+| 89 | Deep Lock | 3 | 7×6, 2 | – | 7 | 3 | 67% | 11.0 s | 19 s | 12 s |
 | 90 | Goods Yard | 3 | 8×5, 1 | – | 8 | 1 | 7% | 10.6 s | 18 s | 12 s |
 | 91 | Own Goal | 2 | 6×3, 1 | shutter | 8 | 1 | 47% | 10.0 s | 18 s | 12 s |
-| 92 | Bristles 🔥 | 3 | 9×3, 1 | – | 11 | 0 | 35% | 11.7 s | 18 s | 13 s |
+| 92 | Bristles 🔥 | 3 | 9×3, 1 | – | 11 | 0 | 35% | 11.7 s | 20 s | 13 s |
 | 93 | Mezzanine | 3 | 9×6, 2 | – | 7 | 3 | 71% | 10.7 s | 18 s | 12 s |
 | 94 | Locked In | 3 | 9×5, 1 | – | 9 | 1 | 8% | 9.9 s | 17 s | 11 s |
-| 95 | Spine | 3 | 9×7, 1 | – | 8 | 0 | 35% | 11.2 s | 18 s | 13 s |
-| 96 | Gated Ring | 3 | 8×5, 1 | – | 8 | 1 | 6% | 13.7 s | 18 s | 15 s |
+| 95 | Spine | 3 | 9×7, 1 | – | 8 | 0 | 35% | 11.2 s | 19 s | 13 s |
+| 96 | Gated Ring | 3 | 8×5, 1 | – | 8 | 1 | 6% | 13.7 s | 23 s | 15 s |
 | 97 | High Swap | 3 | 9×5, 2 | – | 6 | 5 | 98% | 5.9 s | 11 s | 7 s |
-| 98 | Bench Swap | 2 | 8×3, 1 | – | 10 | 0 | 9% | 12.8 s | 18 s | 14 s |
+| 98 | Bench Swap | 2 | 8×3, 1 | – | 10 | 0 | 9% | 12.8 s | 22 s | 14 s |
 | 99 | Blue Drop | 3 | 8×3, 2 | colour filter, sky rail, drop | 8 | 2 | 86% | 7.9 s | 14 s | 9 s |
-| 100 | Vortex 🔥 | 3 | 7×6, 2 | whirl | 10 | 5 | 92% | 10.9 s | 18 s | 12 s |
+| 100 | Vortex 🔥 | 3 | 7×6, 2 | whirl | 10 | 5 | 92% | 10.9 s | 19 s | 12 s |
 
 Directions below are grid directions. With the default camera, north is up the screen and east is to the right.
 
@@ -597,7 +597,7 @@ Decks, yards, combs and the five-marble Grand Machine, at up to eleven moves.
 
 ## Grand finale (91–100)
 
-The hardest machines that still fit the 20-second clock, ending with Vortex: ten moves through a whirl and a crossing.
+The hardest machines, ending with Vortex: ten moves through a whirl and a crossing.
 
 ### 91. Own Goal
 - Orange starts on the plate, but orange's own goal is behind the gate that plate opens.
@@ -640,6 +640,6 @@ The hardest machines that still fit the 20-second clock, ending with Vortex: ten
 - 3 marbles · 2 tiers · whirl · fewest moves 10 (4 shortest solutions) · reference: S, SW, NE, S, E, N, W, S, SW, NE (10.9 s) · gate A costs, gate B costs · losing openings: NE, E, SE, W, NW
 
 ## Notes for the next pass
-- Twenty seconds is tight on purpose. The playtest log (Settings → Playtest tools) shows restarts and time-ups per level; a level that times out far more often than its neighbours is a candidate for an easier slot.
+- Thirty seconds leaves room to think, but the stars still ask for speed. The playtest log (Settings → Playtest tools) shows restarts and time-ups per level; a level that times out far more often than its neighbours is a candidate for an easier slot.
 - Sky rails punish stopping. Check that testers understand why a marble fell (the "Oops!" screen) and don't read it as a bug.
 - The solve times here are for direction assist on. Re-run `npm test` after any physics change, and `npm run solve` / `npm run audit` to see if move counts or lock purposes changed.
