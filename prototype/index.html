@@ -260,38 +260,29 @@
     text-align: center;
   }
   .home-screen button { pointer-events: auto; }
-  .home-top { display: flex; justify-content: flex-end; }
-  .home-bottom { display: flex; justify-content: center; padding-bottom: 10px; }
-  /* The one big button: the next level's number, with its name on a tab. */
-  .level-btn {
-    position: relative;
-    width: min(320px, 100%);
-    padding: 30px 20px 26px;
-    border-radius: 28px;
-    background: var(--go);
-    color: #fff;
-    box-shadow: inset 0 -7px 0 #135a5d, 0 0 0 4px var(--maple), 0 0 0 7px var(--maple-edge), 0 14px 30px rgba(0, 0, 0, 0.25);
-    display: grid;
-    justify-items: center;
-  }
-  .level-btn .big { font: 700 40px/1 var(--font-display); text-shadow: 0 2px 0 #135a5d; padding-bottom: 7px; }
-  .level-btn .tab {
-    position: absolute;
-    top: -14px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: calc(100% - 40px);
-    padding: 5px 16px 6px;
-    border-radius: 10px;
+  .home-screen h1 { margin: 0; font: 700 32px/1.1 var(--font-display); letter-spacing: 0.2px; text-wrap: balance; text-shadow: 0 2px 0 var(--table-deep); }
+  .home-screen .progress { margin: 8px 0 0; font-size: 14px; opacity: 0.92; }
+  .home-play { display: grid; place-content: center; justify-items: center; gap: 16px; }
+  .next-card { display: grid; gap: 3px; padding: 8px 18px 10px; border-radius: 14px; background: rgba(18, 74, 77, 0.82); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
+  .home-screen .next { margin: 0; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; opacity: 0.85; }
+  .home-screen .level { margin: 0; font: 700 19px/1.2 var(--font-display); }
+  .play {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    /* 5px more at the bottom balances the pressed-edge shadow, so content centres on the visible face */
+    padding: 16px 36px 21px;
+    line-height: 1;
+    border-radius: 999px;
     background: var(--maple);
-    box-shadow: inset 0 -3px 0 var(--maple-edge);
     color: var(--ink);
-    font: 700 15px/1.1 var(--font-display);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font: 700 26px/1 var(--font-display);
+    box-shadow: inset 0 -5px 0 var(--maple-edge), 0 10px 26px rgba(0, 0, 0, 0.22);
   }
-  .level-btn:active { transform: translateY(2px); box-shadow: inset 0 -3px 0 #135a5d, 0 0 0 4px var(--maple), 0 0 0 7px var(--maple-edge), 0 8px 18px rgba(0, 0, 0, 0.22); }
+  .play svg { width: 20px; height: 24px; color: var(--go); flex: none; }
+  .play:active { transform: translateY(2px); box-shadow: inset 0 -2px 0 var(--maple-edge), 0 6px 16px rgba(0, 0, 0, 0.2); }
+  .home-foot { display: flex; justify-content: center; gap: 12px; }
   .icon-btn { width: 54px; height: 54px; padding: 0; border-radius: 16px; display: grid; place-items: center; color: var(--go); }
   .icon-btn svg { width: 28px; height: 28px; }
   /* Simple settings: a row of big round toggles. */
@@ -344,15 +335,23 @@
 </footer>
 
 <section class="home-screen" id="home" aria-label="Home">
-  <div class="home-top">
-    <button class="token icon-btn" id="homeSettings" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M20.30 12.00 L22.55 13.00 L22.13 15.12 L19.67 15.18 L18.90 16.61 L17.87 17.87 L18.76 20.17 L16.96 21.37 L15.18 19.67 L13.62 20.14 L12.00 20.30 L11.00 22.55 L8.88 22.13 L8.82 19.67 L7.39 18.90 L6.13 17.87 L3.83 18.76 L2.63 16.96 L4.33 15.18 L3.86 13.62 L3.70 12.00 L1.45 11.00 L1.87 8.88 L4.33 8.82 L5.10 7.39 L6.13 6.13 L5.24 3.83 L7.04 2.63 L8.82 4.33 L10.38 3.86 L12.00 3.70 L13.00 1.45 L15.12 1.87 L15.18 4.33 L16.61 5.10 L17.87 6.13 L20.17 5.24 L21.37 7.04 L19.67 8.82 L20.14 10.38Z M15.40 12 A3.4 3.4 0 1 0 8.60 12 A3.4 3.4 0 1 0 15.40 12Z"/></svg></button>
+  <div>
+    <h1>Marble Machine Rush</h1>
+    <p class="progress" id="homeProgress">0 of 50 levels complete</p>
   </div>
-  <div></div>
-  <div class="home-bottom">
-    <button class="level-btn" id="playBtn" type="button">
-      <span class="tab" id="homeName">First Tilt</span>
-      <span class="big">Level <span id="homeNum">1</span></span>
+  <div class="home-play">
+    <div class="next-card">
+      <p class="next" id="homeNext">Next level</p>
+      <p class="level"><span id="homeNum">1</span> · <span id="homeName">First Tilt</span></p>
+    </div>
+    <button class="play" id="playBtn" type="button">
+      <svg viewBox="7 3.6 14 16.8" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.87l12-7.5a1 1 0 0 0 0-1.74l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor"/></svg>
+      Play
     </button>
+  </div>
+  <div class="home-foot">
+    <button class="token" id="homeLevels" type="button">Levels</button>
+    <button class="token" id="homeSettings" type="button">Settings</button>
   </div>
 </section>
 

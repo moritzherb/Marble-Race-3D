@@ -12,7 +12,7 @@ This prototype exists to answer one question before more is built: **can players
   ```
   It needs an internet connection the first time, to load three.js and the fonts.
 
-**How it plays:** the app opens on a home screen with your next level turning slowly in the background. Tap the big level button at the bottom to play. The gear opens Settings: Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. There are 50 levels, and they unlock in order.
+**How it plays:** the app opens on a home screen with your progress and the next level turning slowly behind a Play button. Levels and Settings sit below it. Settings has Sound, Vibration (on phones that support it) and Hints toggles, plus How to play. There are 50 levels, and they unlock in order.
 
 **Controls:** drag anywhere to tilt; let go to level out. The two round buttons turn the view. On a keyboard, use the arrows or WASD (two keys for a diagonal), R to restart, and Enter on the home screen to play.
 

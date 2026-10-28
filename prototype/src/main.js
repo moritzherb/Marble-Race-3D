@@ -38,6 +38,7 @@ const game = {
   acc: 0,
   autoplay: null,
   card: null,
+  levelsFrom: 'home', // where the level list's Back button returns to
 };
 
 const colorCss = (c) => `#${(MARBLE_COLORS[c] ?? 0xffffff).toString(16).padStart(6, '0')}`;
@@ -81,7 +82,11 @@ function showHome() {
   leaveAttempt();
   closeCard();
   game.screen = 'home';
+  const progress = loadProgress();
+  const done = LEVELS.filter((_, i) => isComplete(progress, i)).length;
   prepareLevel(nextLevelIndex());
+  $('homeProgress').textContent = `${done} of ${LEVELS.length} levels complete`;
+  $('homeNext').textContent = done === LEVELS.length ? 'All levels complete · play again' : done === 0 ? 'First level' : 'Next level';
   $('homeNum').textContent = game.index + 1;
   $('homeName').textContent = game.level.name;
   $('playBtn').setAttribute('aria-label', `Play level ${game.index + 1}, ${game.level.name}`);
@@ -183,6 +188,7 @@ attachInput($('stage'), {
 });
 
 $('playBtn').addEventListener('click', () => play());
+$('homeLevels').addEventListener('click', () => openCard('levels', { from: 'home' }));
 $('homeSettings').addEventListener('click', () => openCard('settings'));
 $('homeBtn').addEventListener('click', () => showHome());
 $('settingsBtn').addEventListener('click', () => openCard('settings'));
@@ -363,7 +369,8 @@ const ACTIONS = {
   settings: () => openCard('settings'),
   howto: () => openCard('howto'),
   tools: () => openCard('tools'),
-  levels: () => openCard('levels'),
+  levels: () => openCard('levels', { from: 'tools' }),
+  levelsBack: () => (game.levelsFrom === 'tools' ? openCard('tools') : closeCard()),
   pick: (el) => play(Number(el.dataset.i)),
   solution: () => watchSolution(),
   copyLog: (el) => {
@@ -427,7 +434,8 @@ const CARDS = {
       <button class="btn primary" data-act="retry" type="button">Try again</button>
     </div>`;
   },
-  levels: () => {
+  levels: ({ from }) => {
+    game.levelsFrom = from;
     const progress = loadProgress();
     return `
     <h2>Levels</h2>
@@ -445,7 +453,7 @@ const CARDS = {
           <span class="got">${p ? '★'.repeat(p.stars) + '☆'.repeat(3 - p.stars) : '☆☆☆'}</span></button>`;
       }).join('')}
     </div>
-    <div class="row"><button class="btn" data-act="tools" type="button">Back</button></div>`;
+    <div class="row"><button class="btn" data-act="levelsBack" type="button">Back</button></div>`;
   },
   // What players see: three big toggles and how to play. Playtest tools sit behind a
   // small link at the bottom.

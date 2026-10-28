@@ -59,7 +59,7 @@ A marble in a groove can only roll along it, so it only reacts to the part of th
 
 ## Flow
 
-- **Home screen:** the app opens here, kept as simple as a casual game's. The next unfinished level turns slowly in the background, with one big "Level N" button at the bottom (the level's name on a tab above it) and a gear in the top right.
+- **Home screen:** the app opens here. The next unfinished level turns slowly behind a central Play button, with your progress at the top and Levels and Settings below.
 - **Settings:** three round toggles (Sound, Vibration, Hints) and How to play. Vibration only appears where the browser supports it, so not on iPhone. Testing options sit behind a small "Playtest tools" link.
 - **Progression:** 50 levels in five chapters (first machines, sidings and spirals, counterweights, in order, grand machines) that unlock in order; finishing one opens the next. The level list shows locked levels.
 - **Difficulty:** measured by the fewest moves the solver needs (one tilt held until everything stops) and by how many opening moves lose the level. It climbs from 1–3 moves early to 6–7 moves with several losing openings at the end. See [levels.md](levels.md).
